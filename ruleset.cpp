@@ -1,0 +1,963 @@
+#include <stdio.h>
+#include <algorithm>
+#include <math.h>
+#include "ruleset.h"
+#include "patternset.h"
+
+
+typedef enum
+{
+	MATCH_YES,
+	MATCH_NO,
+	MATCH_PARTIAL
+} MatchResult;
+
+typedef enum
+{
+	DIV_PATTERN,
+	DIV_TABLE
+} DivType;
+
+static int nodeGen = 0;
+
+// test if the pattern from rule r is consumed by the f pattern.
+static MatchResult RuleMatch(const Rule& r, const Pattern& f)
+{
+	unsigned int commonmask = f.Mask() & r.Mask();
+	if ( (r.Signature() & commonmask) != (f.Signature() & commonmask) )
+		return MATCH_NO;
+
+	if ( (r.Mask() & f.Mask()) == f.Mask() )
+		return MATCH_YES;
+
+	return MATCH_PARTIAL;
+}
+
+// count one bits. most efficient for sparse ones.
+static unsigned int bitcount(unsigned int n)  
+{
+	unsigned int count = 0;
+	while (n)  
+	{
+		count++;
+		n &= (n - 1);
+	}
+	return count;
+}
+
+bool RuleSetSortPredicate(Rule* a, Rule* b)
+{
+  return a->Label() < b->Label();
+}
+
+RuleSet::RuleSet(): mChildren(0), mChildCount(0), mScratchpad(0), mGamma(9.0f), mLabel(0)
+{
+}
+
+RuleSet::~RuleSet()
+{
+	unsigned int i;
+
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+
+		delete rule;
+	}
+
+	mRules.clear();
+
+
+	if (mChildren)
+	{
+		delete[] mChildren;
+	}
+
+	mChildren = 0;
+	mChildCount = 0;
+}
+
+void RuleSet::Add(const Rule& rule)
+{
+	mRules.push_back( new Rule(rule) );
+}
+
+unsigned int RuleSet::CalculateGlobalMask() const
+{
+	unsigned int i;
+	unsigned int mask = 0;
+
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+
+		mask |= rule->Mask();
+	}
+
+	return mask;
+}
+
+unsigned int RuleSet::CalculateLabel() const
+{
+	unsigned int i;
+	unsigned int label = ~1;
+
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+
+		if (i == 0)
+			label = rule->Label();
+		else if (rule->Label() != label)
+			return ~0;
+	}
+
+	return label;
+}
+
+bool RuleSet::Load(const char* filepath, LabelSet* labelset)
+{
+	FILE* f = 0;
+	char buf[4096];
+	unsigned int val;
+	unsigned int mask;
+	int valid;
+	unsigned int i;
+	unsigned int namelen;
+	unsigned int label;
+	char name[4096];
+	int fetchname;
+	std::string patstr;
+	unsigned int linenum = 1;
+
+
+	f = fopen(filepath, "rb");
+	if (!f)
+		return false;
+
+	while(1)
+	{
+		if (feof(f))
+			break;
+
+		memset(buf, 0, sizeof(buf));
+		if (0 == fgets(buf, sizeof(buf)-1, f))
+			break;
+
+		valid = 0;
+		val = 0;
+		mask = 0;
+		namelen = 0;
+		fetchname = 0;
+
+		for(i=0; buf[i] != 0 && buf[i] != '#'; i++)
+		{
+			switch(buf[i])
+			{
+				case ']':
+					fetchname = 0;
+				break;
+			}
+
+			if (fetchname && (namelen+1) < sizeof(name))
+				name[namelen++] = buf[i];
+
+			switch(buf[i])
+			{
+				case '-': 
+					mask = (mask<<1)|0; 
+					val = (val<<1)|0;
+					valid = 1;
+				break;
+				
+				case '1': 
+					mask = (mask<<1)|1; 
+					val = (val<<1)|1; 
+					valid = 1;
+				break;
+				
+				case '0': 
+					mask = (mask<<1)|1; 
+					val = (val<<1)|0; 
+					valid = 1;
+				break;
+
+				case '[':
+					fetchname = 1;
+				break;
+			}
+		}
+
+		name[namelen] = 0;
+
+		if (valid && namelen > 0)
+		{
+			Rule* rule = new Rule;
+
+			label = labelset->Find(name);
+			if (label == ~0)
+				label = labelset->Add(name);
+
+			rule->SetSignature(val);
+			rule->SetMask(mask);
+			rule->SetLabel(label);
+			rule->SetLineNum(linenum);
+			rule->BuildPatternString(&patstr);
+
+			mRules.push_back(rule);
+
+
+
+			
+		}
+
+		linenum++;
+	}
+
+	std::sort(mRules.begin(), mRules.end(), RuleSetSortPredicate);
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+
+		mask = rule->Mask();
+		val = rule->Signature();
+		label = rule->Label();
+		rule->BuildPatternString(&patstr);
+		
+
+		
+
+
+		fprintf(stdout, "%s, %s, %d\n", patstr.c_str(), labelset->Lookup(label).c_str(), label);
+	}
+
+	return true;
+}
+
+void RuleSet::CalculateUndefined(LabelSet* labelset)
+{
+	PatternSet defined;
+	PatternSet undefined;
+	unsigned int i;
+
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+		Pattern pat;
+
+		pat.SetSignature( rule->Signature() );
+		pat.SetMask( rule->Mask() );
+
+		defined.Add(pat);
+	}
+
+	undefined.Complement(defined);
+
+	if (undefined.Size() != 0)
+	{
+		unsigned int label = labelset->Add("undefined");
+		
+		for(i=0; i<undefined.Size(); i++)
+		{
+			Pattern* pat = undefined.Lookup(i);
+			Rule rule;
+
+			rule.SetSignature( pat->Signature() );
+			rule.SetMask( pat->Mask() );
+			rule.SetLabel( label );
+			rule.SetLineNum(0);
+
+			printf("Add undefined rule:");
+			rule.Print();
+		}
+	}
+}
+
+bool RuleSet::CheckOverlap(const LabelSet& labels)
+{
+	unsigned int i;
+	unsigned int j;
+	unsigned int commonmask;
+	bool result = false;
+
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* ra = mRules[i];
+
+
+		for(j=i+1; j<mRules.size(); j++)
+		{
+			Rule* rb = mRules[j];
+
+			commonmask = ra->Mask() & rb->Mask();
+
+			if ( (ra->Signature() & commonmask) == (rb->Signature() & commonmask) )
+			{
+				if (!result)
+				{
+					result = true;
+					fprintf(stderr, "ERROR: Please fix the overlap of bit encodings between the following rules:\n");
+				}
+
+				const std::string& pa = labels.Lookup(ra->Label());
+				const std::string& pb = labels.Lookup(rb->Label());
+
+				fprintf(stderr, "ERROR: Overlap between line %d and %d (%s vs %s).\n", ra->LineNum(), rb->LineNum(), pa.c_str(), pb.c_str());
+			}
+		}
+	}
+
+	return result;
+}
+
+
+float RuleSet::TestDivideByPattern(const Pattern& f)
+{
+	unsigned int left = 0;
+	unsigned int right = 0;
+	unsigned int partial = 0;
+	unsigned int i;
+
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+		MatchResult match = RuleMatch(*rule, f);
+
+		// rule is fully consumed by f
+		if (match == MATCH_YES)
+		{
+			left++;
+		}
+		else if (match == MATCH_NO) // no subrule is even consumed by f
+		{
+			right++;
+		}
+		else // only some subrules are consumed by f
+		{
+			left++;
+			right += bitcount( f.Mask() & ~rule->Mask() );
+		}
+	}
+
+	// check if pattern is useless
+	if (left == mRules.size() && right == 0)
+		return 0.0;
+	if (right == mRules.size() && left == 0)
+		return 0.0;
+
+
+	// calculate score
+	unsigned int maxheight = left;
+	if (maxheight < right)
+		maxheight = right;
+
+	unsigned int score = maxheight + left + right;
+	//return score;
+
+	float mr = (float)(left + right - 1);
+	mr = mr / (mRules.size() - 1.0f);
+//	printf("pattern mr %f\n", mr);
+	mr = log(mr) / log(2.0f);
+	return 1.0f + maxheight + mGamma * mr;
+}
+
+
+float RuleSet::TestDivideByTable(unsigned int bitstart, unsigned int bitlength)
+{
+	unsigned int mask;
+	unsigned int fillnmask;
+	unsigned int fillsig;
+	unsigned int fillmask;
+	unsigned int fillcount;
+	unsigned int index;
+//	unsigned int score;
+	unsigned int sum = 0;
+	unsigned int nonzero = 0;
+	unsigned int maxheight = 0;
+	unsigned int i;
+	unsigned int k;
+	unsigned int count;
+	unsigned int* bucket;
+	Rule r;
+
+
+	count = (1<<bitlength);
+	mask = (count-1) << bitstart;
+	mScratchpad->AllocateBucket(count);
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+
+
+		// setup bitpattern generator for generating indices from rule
+		fillmask = mask & (~rule->Mask());
+		fillnmask = ~fillmask;
+		fillsig = fillnmask;
+		fillcount = 1<<bitcount(fillmask);
+
+		r.SetLabel(rule->Label());
+
+		// generate indices that are consumed by the given rule for the table
+		for(k=0; k<fillcount; k++)
+		{
+			r.SetMask(mask | rule->Mask());
+			r.SetSignature(rule->Signature() | (fillsig & fillmask));
+
+			index = (r.Signature()&mask) >> bitstart;
+
+			fillsig = (fillsig+1) | fillnmask;
+
+			bucket = mScratchpad->Bucket(index);
+			(*bucket)++;
+		}
+	}
+
+	float mr = count + 1.0f;
+	for(i=0; i<count; i++)
+	{
+		bucket = mScratchpad->Bucket(i);
+
+		if (*bucket != 0)
+		{
+			nonzero++;
+			mr += (*bucket - 1.0f);
+			sum += *bucket;
+		}
+
+		if (maxheight < *bucket)
+			maxheight = *bucket;
+	}
+
+	if (sum == mRules.size() && nonzero == 1) // table is useless
+	{
+		return 0.0f;
+	}
+
+	//score = sum + maxheight;
+	//return score;
+	
+	mr = mr / (mRules.size() - 1.0f);
+	//printf("table mr %f\n", mr);
+	mr = log(mr) / log(2.0f);
+
+	return 1.0f + maxheight + mGamma * mr;
+}
+
+
+bool RuleSet::DivideByPattern(const Pattern& f)
+{
+	unsigned int i;
+	unsigned int j;
+	unsigned int mask;
+	unsigned int nmask;
+	unsigned int sig;
+	unsigned int smask;
+	unsigned int tmask;
+	unsigned int patterncount;
+	Rule r;
+
+
+	if (mScratchpad == 0)
+	{
+		fprintf(stderr, "ERROR: NO SCRATCHPAD\n");
+		return false;
+	}
+
+	mChildren = new RuleSet[2];
+	mChildCount = 2;
+
+	RuleSet* left = &mChildren[0];
+	RuleSet* right = &mChildren[1];
+
+	left->SetScratchpad(mScratchpad);
+	right->SetScratchpad(mScratchpad);
+
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+		MatchResult match = RuleMatch(*rule, f);
+
+		if (match == MATCH_YES)
+		{
+			left->Add(*rule);
+		}
+		else if (match == MATCH_NO)
+		{
+			right->Add(*rule);
+		}
+		else
+		{
+			r.SetLabel( rule->Label() );
+
+			// rule is split into exact matching rule and its complement.
+
+			r.SetSignature( rule->Signature() | f.Signature() );
+			r.SetMask( rule->Mask() | f.Mask() );
+
+			// add exact matching rule to 'YES' subtree.
+			left->Add(r);
+
+			// generate complement of rule, and those to the 'NO' subtree.
+			mask = f.Mask() & ~rule->Mask();
+			nmask = ~mask;
+			patterncount = bitcount( mask );
+			tmask = mask & (nmask + 1);
+			smask = rule->Mask() | f.Mask();
+			sig = rule->Signature() | f.Signature();
+
+			for(j=0; j<patterncount; j++)
+			{
+				r.SetSignature( (sig ^ tmask) & smask);
+				r.SetMask(smask);
+
+				smask ^= tmask;
+				tmask = mask & (nmask + (tmask<<1));
+
+				right->Add(r);
+			}
+		}
+	}
+
+	if (false == left->Divide())
+		return false;
+	if (false == right->Divide())
+		return false;
+
+	return true;
+}
+
+
+
+bool RuleSet::DivideByTable(unsigned int bitstart, unsigned int bitlength)
+{
+	unsigned int mask;
+	unsigned int fillnmask;
+	unsigned int fillsig;
+	unsigned int fillmask;
+	unsigned int fillcount;
+	unsigned int index;
+	unsigned int i;
+	unsigned int k;
+	unsigned int count;
+	Rule r;
+
+	if (mScratchpad == 0)
+	{
+		fprintf(stderr, "ERROR: NO SCRATCHPAD\n");
+		return false;
+	}
+
+	count = (1<<bitlength);
+	mask = (count-1) << bitstart;
+	
+	mChildren = new RuleSet[count];
+	mChildCount = count;
+
+	for(i=0; i<mChildCount; i++)
+	{
+		RuleSet* set = &mChildren[i];
+
+		set->SetScratchpad(mScratchpad);
+	}
+
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+
+
+		fillmask = mask & (~rule->Mask());
+		fillnmask = ~fillmask;
+		fillsig = fillnmask;
+		fillcount = 1<<bitcount(fillmask);
+
+		r.SetLabel(rule->Label());
+		
+		// split rules if necessary by index and add them to each subtree
+		
+		for(k=0; k<fillcount; k++)
+		{
+			r.SetMask(mask | rule->Mask());
+			r.SetSignature(rule->Signature() | (fillsig & fillmask));
+
+			index = (r.Signature()&mask) >> bitstart;
+			mChildren[index].Add(r);
+
+			fillsig = (fillsig+1) | fillnmask;
+		}
+	}
+
+	for(i=0; i<mChildCount; i++)
+	{
+		RuleSet* set = &mChildren[i];
+
+
+		if (false == set->Divide())
+			return false;
+	}
+
+	return true;
+}
+
+
+bool RuleSet::Divide()
+{
+	Pattern minf;
+	bool firstminscore = true;
+	float minscore = 0.0f;
+	unsigned int i;
+	unsigned int k;
+	unsigned int b;
+	float score;
+	unsigned int gmask = CalculateGlobalMask();
+	unsigned int minmask = 0;
+	unsigned int minsig = 0;
+	unsigned int nextminmask;
+	unsigned int nextminsig;
+	unsigned int mask;
+	unsigned int sig;
+	unsigned int tests;
+	unsigned int mintype = DIV_PATTERN;
+	unsigned int minpos;
+	unsigned int minlen;
+	unsigned int len;
+
+	bool more;
+	Pattern f;
+
+	if (mScratchpad == 0)
+	{
+		fprintf(stderr, "ERROR: NO SCRATCHPAD\n");
+		return false;
+	}
+
+	mNode = nodeGen++;
+
+	Minimize();
+
+	mLabel = CalculateLabel();
+	if (mLabel != ~0)
+		return true;
+
+
+	// generate candidate division patterns by growing a one bit at a time if improvement is found
+	minmask = 0;
+	minsig = 0;
+	minf.SetMask(0);
+	minf.SetSignature(0);
+
+	for(b=0; b<32; b++)
+	{
+		more = false;
+
+		for(i=0; i<32; i++)
+		{
+			if ( (1<<i) & minmask )
+				continue;
+
+			if ( ((1<<i) & gmask) == 0 )
+				continue;
+
+			if (b == 0)
+				tests = 1;
+			else if (b == 1)
+				tests = 4;
+			else
+				tests = 2;
+
+			for(k=0; k<tests; k++)
+			{
+				if (b == 0)
+				{
+					mask = (1<<i);
+					sig = (1<<i);
+				}
+				else if (b == 1)
+				{
+					mask = minmask | (1<<i);
+					if (k == 0)
+						sig = 0;
+					else if (k == 1)
+						sig = (1<<i);
+					else if (k == 2)
+						sig = minmask;
+					else if (k == 3)
+						sig = minmask | (1<<i);
+				}
+				else
+				{
+					mask = minmask | (1<<i);
+					if (k == 0)
+						sig = minsig;
+					else
+						sig = minsig | (1<<i);
+				}
+
+				// test with tsig/tmask
+				f.SetSignature(sig & mask);
+				f.SetMask(mask);
+
+				score = TestDivideByPattern(f);
+				if (score > 0.1f && (score < minscore || firstminscore))
+				{
+					firstminscore = false;
+					mintype = DIV_PATTERN;
+					minscore = score;
+					minf = f;
+					nextminmask = mask;
+					nextminsig = sig;
+					more = true;
+				}
+			}
+		}
+
+		if (!more)
+			break;
+
+		minmask = nextminmask;
+		minsig = nextminsig;
+	}
+
+	// generate candidate division tables
+	len = 2;
+	more = true;
+
+	while(more)
+	{
+		more = false;
+
+		for(i=0; i<=32-len; i++)
+		{
+			mask = ((1<<len)-1) << i;
+			
+			if ((mask&gmask) == 0)
+				continue;
+
+			score = TestDivideByTable(i, len);
+			if (score > 0.1f && (score < minscore || firstminscore))
+			{
+				firstminscore = false;
+				mintype = DIV_TABLE;
+				minscore = score;
+				minpos = i;
+				minlen = len;
+				more = true;
+			}
+		}
+
+		len++;
+	}
+
+	if (firstminscore)
+	{
+		fprintf(stderr, "ERROR: NO MINIMUM SCORE REACHED\n");
+		return false;
+	}
+
+	mDivType = mintype;
+
+	if (mDivType == DIV_PATTERN)
+	{
+		mDivPattern = minf;
+
+		return DivideByPattern(mDivPattern);
+	}
+	else if (mDivType == DIV_TABLE)
+	{
+		mDivTableStart = minpos;
+		mDivTableLength = minlen;
+
+		return DivideByTable(mDivTableStart, mDivTableLength);
+	}
+	else
+	{
+		return false;
+	}
+}
+
+
+void RuleSet::Print()
+{
+	unsigned int i;
+	unsigned int mask;
+	unsigned int sig;
+	unsigned int label;
+	std::string str;
+
+	for(i=0; i<mRules.size(); i++)
+	{
+		Rule* rule = mRules[i];
+
+		mask = rule->Mask();
+		sig = rule->Signature();
+		label = rule->Label();
+		rule->BuildPatternString(&str);
+
+
+		fprintf(stdout, "%08x, %08x, %s, %d\n", mask, sig, str.c_str(),  label);
+	}
+}
+
+void RuleSet::SaveDot(const char* filepath)
+{
+	FILE* f = fopen(filepath, "wb");
+
+	fprintf(f, "digraph g {\n");
+	SaveDot(f);
+	fprintf(f, "}\n");
+	fclose(f);
+}
+
+void RuleSet::SaveDot(FILE* f)
+{
+	unsigned int i;
+
+
+	if (mChildCount == 0)
+	{
+		fprintf(f, "n%d [label=\"%d\"];\n", mNode, mLabel);
+	}
+	else
+	{
+		if (mDivType == DIV_PATTERN)
+		{
+			bool first = true;
+			fprintf(f, "n%d [label=\"P(", mNode);
+			for(i=0; i<32; i++)
+			{
+				if ( mDivPattern.Mask() & (1<<i) )
+				{
+					if (!first)
+					{
+						fprintf(f, ",");
+					}
+					first=false;
+					if (mDivPattern.Signature() & (1<<i))
+						fprintf(f, "%d", i);
+					else
+						fprintf(f, "!%d", i);
+				}
+			}
+			fprintf(f, ")\"];\n");
+		}
+		else if (mDivType == DIV_TABLE)
+		{
+			fprintf(f, "n%d [label=\"T(%d,%d)\"];\n", mNode, mDivTableStart, mDivTableLength);
+		}
+	}
+
+	if (mDivType == DIV_PATTERN)
+	{
+		for(i=0; i<mChildCount; i++)
+		{
+			RuleSet* child = &mChildren[i];
+
+			if (i == 0)
+				fprintf(f, "n%d -> n%d [label=\"Y\"];\n", mNode, child->mNode);
+			else if (i == 1)
+				fprintf(f, "n%d -> n%d [label=\"N\"];\n", mNode, child->mNode);
+		}
+	}
+	else if (mDivType == DIV_TABLE)
+	{
+		for(i=0; i<mChildCount; i++)
+		{
+			RuleSet* child = &mChildren[i];
+
+			fprintf(f, "n%d -> n%d [label=\"%d\"];\n", mNode, child->mNode, i);
+		}
+	}
+
+	for(i=0; i<mChildCount; i++)
+	{
+		RuleSet* child = &mChildren[i];
+
+		child->SaveDot(f);
+	}
+}
+
+
+void RuleSet::MinimizeAlternative()
+{
+	unsigned int k;
+	unsigned int j;
+	unsigned int i;
+	unsigned int mask;
+
+
+	for(k=0; k<32; k++)
+	{
+		for(j=0; j<mRules.size(); j++)
+		{
+			Rule* a = mRules[j];
+
+			i = j+1;
+			while(i < mRules.size())
+			{
+				Rule* b = mRules[i];
+
+				mask = (a->Signature() & a->Mask()) ^ (b->Signature() & b->Mask());
+
+				if (a->Label() == b->Label() && a->Mask() == b->Mask() && mask && mask == (1<<k))
+				{
+					a->SetSignature( a->Signature() & b->Signature() );
+					a->SetMask( a->Mask() ^ mask );
+					mRules.erase( mRules.begin() + i );
+					delete b;
+				}
+				else
+				{
+					i++;
+				}
+			}
+		}
+	}
+}
+
+void RuleSet::Minimize()
+{
+	unsigned int j;
+	unsigned int i;
+	unsigned int mask;
+	bool fixpoint = false;
+
+	while(!fixpoint)
+	{
+		fixpoint = true;
+
+		for(j=0; j<mRules.size(); j++)
+		{
+			Rule* a = mRules[j];
+
+			i = j+1;
+			while(i < mRules.size())
+			{
+				Rule* b = mRules[i];
+
+				mask = (a->Signature() & a->Mask()) ^ (b->Signature() & b->Mask());
+
+				if (a->Label() == b->Label() && a->Mask() == b->Mask() && mask && (mask&(mask-1))==0)
+				{
+					a->SetSignature( a->Signature() & b->Signature() );
+					a->SetMask( a->Mask() ^ mask );
+					mRules.erase( mRules.begin() + i );
+					delete b;
+					fixpoint = false;
+				}
+				else
+				{
+					i++;
+				}
+			}
+		}
+	}
+}
