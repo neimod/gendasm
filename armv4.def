@@ -164,6 +164,6 @@ void umull(opcode* op, unsigned int in)
 {
 }
 
-void undef(opcode* op, unsigned int in)
+void undefined(opcode* op, unsigned int in)
 {
 }
