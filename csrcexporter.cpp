@@ -19,9 +19,10 @@ bool CSrcExporter::Begin()
 	}
 
 
-	fprintf(mFile, "typedef void(*func_t)(unsigned int);\n\n");
-	fprintf(mFile, "static void nullstub(unsigned int);\n");
-	fprintf(mFile, "void nullstub(unsigned int in)\n{\n}\n\n");
+	fprintf(mFile, "#include \"types.h\"\n");
+	fprintf(mFile, "typedef void(*func_t)(opcode*, unsigned int);\n\n");
+	fprintf(mFile, "static void nullstub(opcode*, unsigned int);\n");
+	fprintf(mFile, "void nullstub(opcode* op, unsigned int in)\n{\n}\n\n");
 
 
 	return true;
@@ -41,6 +42,7 @@ void CSrcExporter::End()
 			text = mSpecFile->FetchCodeText(i, &size);
 
 			fwrite(text, 1, size, mFile);
+			fprintf(mFile, "\n");
 		}
 	}
 
@@ -52,12 +54,12 @@ void CSrcExporter::End()
 
 void CSrcExporter::VisitLabelPrototype(const std::string& label)
 {
-	fprintf(mFile, "static void %s(unsigned int);\n", label.c_str());
+	fprintf(mFile, "static void %s(opcode*, unsigned int);\n", label.c_str());
 }
 
 void CSrcExporter::VisitStubPrototype(unsigned int id)
 {
-	fprintf(mFile, "static void stub_%d(unsigned int);\n", id);
+	fprintf(mFile, "static void stub_%d(opcode*, unsigned int);\n", id);
 }
 
 void CSrcExporter::BeginTable(unsigned int id, unsigned int count)
@@ -96,9 +98,9 @@ void CSrcExporter::Indent(unsigned int count)
 void CSrcExporter::BeginStub(unsigned int id)
 {
 	if (id == 0)
-		fprintf(mFile, "\nvoid %s(unsigned int in)\n", mSpecFile->RootFunctionName().c_str());
+		fprintf(mFile, "\nvoid %s(opcode* op, unsigned int in)\n", mSpecFile->RootFunctionName().c_str());
 	else
-		fprintf(mFile, "\nvoid stub_%d(unsigned int in)\n", id);
+		fprintf(mFile, "\nvoid stub_%d(opcode* op, unsigned int in)\n", id);
 	fprintf(mFile, "{\n");
 
 	mIndent = 1;
@@ -112,7 +114,7 @@ void CSrcExporter::EndStub()
 void CSrcExporter::VisitLabel(const std::string& label)
 {
 	Indent(mIndent);
-	fprintf(mFile, "%s(in);\n", label.c_str());
+	fprintf(mFile, "%s(op, in);\n", label.c_str());
 }
 
 void CSrcExporter::VisitPattern(unsigned int mask, unsigned int signature)
@@ -154,7 +156,7 @@ void CSrcExporter::EndFalseBranch()
 void CSrcExporter::VisitTable(unsigned int shift, unsigned int mask, unsigned id)
 {
 	Indent(mIndent);
-	fprintf(mFile, "(table_%d[(in>>%d)&0x%X])(in);\n", id, shift, mask);
+	fprintf(mFile, "(table_%d[(in>>%d)&0x%X])(op, in);\n", id, shift, mask);
 }
 
 

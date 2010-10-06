@@ -96,10 +96,7 @@ root=disassemble_arm4
 
 void datproc(opcode* op, unsigned int in)
 {
- if (a < b && b > c)
- {
-   return aa;
- }
+
 }
 
 
