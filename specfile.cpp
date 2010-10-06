@@ -299,7 +299,7 @@ bool SpecFile::LoadRules(RuleSet* rules, LabelSet* labels)
 	}
 
 //	std::sort(mRules.begin(), mRules.end(), RuleSetSortPredicate);
-	rules->Print();
+//	rules->Print();
 
 	return true;
 }

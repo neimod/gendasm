@@ -153,6 +153,8 @@ void RuleSet::CalculateUndefined(LabelSet* labelset)
 
 			printf("Add undefined rule:");
 			rule.Print();
+
+			Add(rule);
 		}
 	}
 }

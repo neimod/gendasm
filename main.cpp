@@ -27,6 +27,8 @@ int main(int argc, char* argv[])
 
 	ruleset.CalculateUndefined(&labelset);
 
+	ruleset.Print();
+
 
 	if (false == ruleset.Divide())
 	{
