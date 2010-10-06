@@ -171,7 +171,15 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
+				RelativePath=".\csrcexporter.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\labelset.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\langexporter.cpp"
 				>
 			</File>
 			<File
@@ -198,6 +206,10 @@
 				RelativePath=".\scratchpad.cpp"
 				>
 			</File>
+			<File
+				RelativePath=".\specfile.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -205,7 +217,15 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath=".\csrcexporter.h"
+				>
+			</File>
+			<File
 				RelativePath=".\labelset.h"
+				>
+			</File>
+			<File
+				RelativePath=".\langexporter.h"
 				>
 			</File>
 			<File
@@ -226,6 +246,10 @@
 			</File>
 			<File
 				RelativePath=".\scratchpad.h"
+				>
+			</File>
+			<File
+				RelativePath=".\specfile.h"
 				>
 			</File>
 		</Filter>

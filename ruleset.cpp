@@ -18,7 +18,6 @@ typedef enum
 	DIV_TABLE
 } DivType;
 
-static int nodeGen = 0;
 
 // test if the pattern from rule r is consumed by the f pattern.
 static MatchResult RuleMatch(const Rule& r, const Pattern& f)
@@ -118,126 +117,6 @@ unsigned int RuleSet::CalculateLabel() const
 	return label;
 }
 
-bool RuleSet::Load(const char* filepath, LabelSet* labelset)
-{
-	FILE* f = 0;
-	char buf[4096];
-	unsigned int val;
-	unsigned int mask;
-	int valid;
-	unsigned int i;
-	unsigned int namelen;
-	unsigned int label;
-	char name[4096];
-	int fetchname;
-	std::string patstr;
-	unsigned int linenum = 1;
-
-
-	f = fopen(filepath, "rb");
-	if (!f)
-		return false;
-
-	while(1)
-	{
-		if (feof(f))
-			break;
-
-		memset(buf, 0, sizeof(buf));
-		if (0 == fgets(buf, sizeof(buf)-1, f))
-			break;
-
-		valid = 0;
-		val = 0;
-		mask = 0;
-		namelen = 0;
-		fetchname = 0;
-
-		for(i=0; buf[i] != 0 && buf[i] != '#'; i++)
-		{
-			switch(buf[i])
-			{
-				case ']':
-					fetchname = 0;
-				break;
-			}
-
-			if (fetchname && (namelen+1) < sizeof(name))
-				name[namelen++] = buf[i];
-
-			switch(buf[i])
-			{
-				case '-': 
-					mask = (mask<<1)|0; 
-					val = (val<<1)|0;
-					valid = 1;
-				break;
-				
-				case '1': 
-					mask = (mask<<1)|1; 
-					val = (val<<1)|1; 
-					valid = 1;
-				break;
-				
-				case '0': 
-					mask = (mask<<1)|1; 
-					val = (val<<1)|0; 
-					valid = 1;
-				break;
-
-				case '[':
-					fetchname = 1;
-				break;
-			}
-		}
-
-		name[namelen] = 0;
-
-		if (valid && namelen > 0)
-		{
-			Rule* rule = new Rule;
-
-			label = labelset->Find(name);
-			if (label == ~0)
-				label = labelset->Add(name);
-
-			rule->SetSignature(val);
-			rule->SetMask(mask);
-			rule->SetLabel(label);
-			rule->SetLineNum(linenum);
-			rule->BuildPatternString(&patstr);
-
-			mRules.push_back(rule);
-
-
-
-			
-		}
-
-		linenum++;
-	}
-
-	std::sort(mRules.begin(), mRules.end(), RuleSetSortPredicate);
-
-	for(i=0; i<mRules.size(); i++)
-	{
-		Rule* rule = mRules[i];
-
-		mask = rule->Mask();
-		val = rule->Signature();
-		label = rule->Label();
-		rule->BuildPatternString(&patstr);
-		
-
-		
-
-
-		fprintf(stdout, "%s, %s, %d\n", patstr.c_str(), labelset->Lookup(label).c_str(), label);
-	}
-
-	return true;
-}
-
 void RuleSet::CalculateUndefined(LabelSet* labelset)
 {
 	PatternSet defined;
@@ -278,7 +157,7 @@ void RuleSet::CalculateUndefined(LabelSet* labelset)
 	}
 }
 
-bool RuleSet::CheckOverlap(const LabelSet& labels)
+bool RuleSet::CheckOverlap(LabelSet* labels)
 {
 	unsigned int i;
 	unsigned int j;
@@ -305,8 +184,8 @@ bool RuleSet::CheckOverlap(const LabelSet& labels)
 					fprintf(stderr, "ERROR: Please fix the overlap of bit encodings between the following rules:\n");
 				}
 
-				const std::string& pa = labels.Lookup(ra->Label());
-				const std::string& pb = labels.Lookup(rb->Label());
+				const std::string& pa = labels->Lookup(ra->Label());
+				const std::string& pb = labels->Lookup(rb->Label());
 
 				fprintf(stderr, "ERROR: Overlap between line %d and %d (%s vs %s).\n", ra->LineNum(), rb->LineNum(), pa.c_str(), pb.c_str());
 			}
@@ -452,7 +331,7 @@ float RuleSet::TestDivideByTable(unsigned int bitstart, unsigned int bitlength)
 }
 
 
-bool RuleSet::DivideByPattern(const Pattern& f)
+bool RuleSet::DivideByPattern(unsigned int* idgen, const Pattern& f)
 {
 	unsigned int i;
 	unsigned int j;
@@ -527,9 +406,9 @@ bool RuleSet::DivideByPattern(const Pattern& f)
 		}
 	}
 
-	if (false == left->Divide())
+	if (false == left->Divide(idgen))
 		return false;
-	if (false == right->Divide())
+	if (false == right->Divide(idgen))
 		return false;
 
 	return true;
@@ -537,7 +416,7 @@ bool RuleSet::DivideByPattern(const Pattern& f)
 
 
 
-bool RuleSet::DivideByTable(unsigned int bitstart, unsigned int bitlength)
+bool RuleSet::DivideByTable(unsigned int* idgen, unsigned int bitstart, unsigned int bitlength)
 {
 	unsigned int mask;
 	unsigned int fillnmask;
@@ -601,15 +480,23 @@ bool RuleSet::DivideByTable(unsigned int bitstart, unsigned int bitlength)
 		RuleSet* set = &mChildren[i];
 
 
-		if (false == set->Divide())
+		if (false == set->Divide(idgen))
 			return false;
 	}
 
 	return true;
 }
 
-
 bool RuleSet::Divide()
+{
+	unsigned int idgen = 0;
+
+	std::sort(mRules.begin(), mRules.end(), RuleSetSortPredicate);
+
+	return Divide(&idgen);
+}
+
+bool RuleSet::Divide(unsigned int* idgen)
 {
 	Pattern minf;
 	bool firstminscore = true;
@@ -640,7 +527,7 @@ bool RuleSet::Divide()
 		return false;
 	}
 
-	mNode = nodeGen++;
+	mNode = (*idgen)++;
 
 	Minimize();
 
@@ -769,14 +656,14 @@ bool RuleSet::Divide()
 	{
 		mDivPattern = minf;
 
-		return DivideByPattern(mDivPattern);
+		return DivideByPattern(idgen, mDivPattern);
 	}
 	else if (mDivType == DIV_TABLE)
 	{
 		mDivTableStart = minpos;
 		mDivTableLength = minlen;
 
-		return DivideByTable(mDivTableStart, mDivTableLength);
+		return DivideByTable(idgen, mDivTableStart, mDivTableLength);
 	}
 	else
 	{
@@ -886,42 +773,6 @@ void RuleSet::SaveDot(FILE* f)
 }
 
 
-void RuleSet::MinimizeAlternative()
-{
-	unsigned int k;
-	unsigned int j;
-	unsigned int i;
-	unsigned int mask;
-
-
-	for(k=0; k<32; k++)
-	{
-		for(j=0; j<mRules.size(); j++)
-		{
-			Rule* a = mRules[j];
-
-			i = j+1;
-			while(i < mRules.size())
-			{
-				Rule* b = mRules[i];
-
-				mask = (a->Signature() & a->Mask()) ^ (b->Signature() & b->Mask());
-
-				if (a->Label() == b->Label() && a->Mask() == b->Mask() && mask && mask == (1<<k))
-				{
-					a->SetSignature( a->Signature() & b->Signature() );
-					a->SetMask( a->Mask() ^ mask );
-					mRules.erase( mRules.begin() + i );
-					delete b;
-				}
-				else
-				{
-					i++;
-				}
-			}
-		}
-	}
-}
 
 void RuleSet::Minimize()
 {
@@ -961,3 +812,133 @@ void RuleSet::Minimize()
 		}
 	}
 }
+
+void RuleSet::Export(LangExporter* exporter, LabelSet* labelset)
+{
+	std::vector<RuleSet*> queue;
+	unsigned int i;
+
+
+	queue.push_back(this);
+	BuildExportQueue(&queue);
+
+	if (false == exporter->Begin())
+		return;
+
+
+	for(i=0; i<labelset->Size(); i++)
+	{
+		exporter->VisitLabelPrototype(labelset->Lookup(i));
+	}
+
+	ExportTables(exporter, labelset);
+
+
+	for(i=0; i<queue.size(); i++)
+	{
+		RuleSet* set = queue[i];
+
+		exporter->BeginStub(set->mNode);
+		set->ExportNode(exporter, labelset);
+		exporter->EndStub();
+	}
+
+	exporter->End();
+}
+
+
+void RuleSet::ExportTables(LangExporter* exporter, LabelSet* labelset)
+{
+	unsigned int i;
+
+
+	if (mChildCount == 0)
+		return;
+
+	if (mDivType == DIV_TABLE)
+	{
+		for(i=0; i<mChildCount; i++)
+		{
+			RuleSet* child = &mChildren[i];
+
+			if (child->mChildCount != 0)
+				exporter->VisitStubPrototype(child->mNode);
+		}
+
+		exporter->BeginTable(mNode, mChildCount);
+		for(i=0; i<mChildCount; i++)
+		{
+			RuleSet* child = &mChildren[i];
+
+			if (child->mChildCount == 0)
+				exporter->VisitLabelEntry(labelset->Lookup(child->mLabel));
+			else
+				exporter->VisitStubEntry(child->mNode);
+		}
+		exporter->EndTable();
+	}
+
+	for(i=0; i<mChildCount; i++)
+	{
+		RuleSet* child = &mChildren[i];
+
+		child->ExportTables(exporter, labelset);
+	}
+}
+
+
+
+void RuleSet::ExportNode(LangExporter* exporter, LabelSet* labelset)
+{
+	if (mChildCount == 0)
+	{
+		exporter->VisitLabel(labelset->Lookup(mLabel));
+	}
+	else
+	{
+		if (mDivType == DIV_PATTERN)
+		{
+			exporter->VisitPattern(mDivPattern.Mask(), mDivPattern.Signature());
+			exporter->BeginTrueBranch();
+			mChildren[0].ExportNode(exporter, labelset);
+			exporter->EndTrueBranch();
+			exporter->BeginFalseBranch();
+			mChildren[1].ExportNode(exporter, labelset);
+			exporter->EndFalseBranch();
+		}
+		else if (mDivType == DIV_TABLE)
+		{
+			exporter->VisitTable(mDivTableStart, (1<<mDivTableLength)-1, mNode);
+		}
+	}
+}
+
+
+
+void RuleSet::BuildExportQueue(std::vector<RuleSet*>* queue)
+{
+	unsigned int i;
+
+
+	if (mChildCount == 0)
+		return;
+
+	if (mDivType == DIV_TABLE)
+	{
+		for(i=0; i<mChildCount; i++)
+		{
+			RuleSet* child = &mChildren[i];
+
+			if (child->mChildCount != 0)
+				queue->push_back(child);
+		}
+	}
+
+	for(i=0; i<mChildCount; i++)
+	{
+		RuleSet* child = &mChildren[i];
+
+		child->BuildExportQueue(queue);
+	}
+}
+

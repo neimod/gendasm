@@ -13,6 +13,7 @@ public:
 	unsigned int Find(const char* name) const;
 	unsigned int Add(const char* name);
 	void Clear();
+	unsigned int Size() const { return mNodes.size(); }
 
 private:
 	typedef struct

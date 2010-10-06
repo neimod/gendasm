@@ -67,24 +67,106 @@
  ----0000110-------------1001---- [smull]
  ----0000101-------------1001---- [umlal]
  ----0000100-------------1001---- [umull]
- ----00110-00-------------------- [undef]
- ----00110-10------------0001---- [undef]
- ----00110-10------------001----- [undef]
- ----00110-10------------01------ [undef]
- ----00110-10------------1------- [undef]
- ----0000---0------------11-1---- [undef]
- ----000001--------------1001---- [undef]
- ----00010--1------------1001---- [undef]
- ----00010-00------------10-0---- [undef]
- ----00010--0-------------1------ [undef]
- ----00010000------------0001---- [undef]
- ----00010--0------------001----- [undef]
- ----00010-10------------1010---- [undef]
- ----00010-10------------100----- [undef]
- ----000101-0------------0001---- [undef]
- ----00011---------------1001---- [undef]
- ----00011--0------------11-1---- [undef]
- ----011--------------------1---- [undef]
- ----1110-------------------0---- [undef]
- ----110------------------------- [undef]
- 
+#----00110-00-------------------- [undef]
+#----00110-10------------0001---- [undef]
+#----00110-10------------001----- [undef]
+#----00110-10------------01------ [undef]
+#----00110-10------------1------- [undef]
+#----0000---0------------11-1---- [undef]
+#----000001--------------1001---- [undef]
+#----00010--1------------1001---- [undef]
+#----00010-00------------10-0---- [undef]
+#----00010--0-------------1------ [undef]
+#----00010000------------0001---- [undef]
+#----00010--0------------001----- [undef]
+#----00010-10------------1010---- [undef]
+#----00010-10------------100----- [undef]
+#----000101-0------------0001---- [undef]
+#----00011---------------1001---- [undef]
+#----00011--0------------11-1---- [undef]
+#----011--------------------1---- [undef]
+#----1110-------------------0---- [undef]
+#----110------------------------- [undef]
+
+%
+
+root=disassemble_arm4
+
+%
+
+void datproc(opcode* op, unsigned int in)
+{
+ if (a < b && b > c)
+ {
+   return aa;
+ }
+}
+
+
+void b(opcode* op, unsigned int in)
+{
+}
+
+void bx(opcode* op, unsigned int in)
+{
+}
+
+void ldmstm(opcode* op, unsigned int in)
+{
+}
+
+void ldrstr(opcode* op, unsigned int in)
+{
+}
+
+void ldrhstrh(opcode* op, unsigned int in)
+{
+}
+
+void mcrmrc(opcode* op, unsigned int in)
+{
+}
+
+void mrs(opcode* op, unsigned int in)
+{
+}
+
+void msr(opcode* op, unsigned int in)
+{
+}
+
+void swi(opcode* op, unsigned int in)
+{
+}
+
+void swp(opcode* op, unsigned int in)
+{
+}
+
+void mla(opcode* op, unsigned int in)
+{
+}
+
+void mul(opcode* op, unsigned int in)
+{
+}
+
+void smlal(opcode* op, unsigned int in)
+{
+}
+
+void smull(opcode* op, unsigned int in)
+{
+}
+
+void umlal(opcode* op, unsigned int in)
+{
+}
+
+void umull(opcode* op, unsigned int in)
+{
+}
+
+void undef(opcode* op, unsigned int in)
+{
+}

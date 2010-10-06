@@ -6,7 +6,7 @@
 #include "labelset.h"
 #include "rule.h"
 #include "scratchpad.h"
-
+#include "langexporter.h"
 
 class RuleSet
 {
@@ -25,33 +25,34 @@ public:
 	RuleSet();
 	~RuleSet();
 
-	bool Load(const char* filepath, LabelSet* labelset);
 	void CalculateUndefined(LabelSet* labelset);
+
+	void Export(LangExporter* exporter, LabelSet* labelset);
 	
 	bool Divide();
 	void Add(const Rule& rule);
 	void Print();
-	void SetScratchpad(Scratchpad* scratchpad) { mScratchpad = scratchpad; }
-	bool CheckOverlap(const LabelSet& labels);
+
+	bool CheckOverlap(LabelSet* labels);
 
 	void SaveDot(const char* filepath);
 
+	void SetScratchpad(Scratchpad* scratchpad) { mScratchpad = scratchpad; }
+	void SetGamma(float gamma) { mGamma = gamma; }	
+
 private:
+	bool Divide(unsigned int* idgen);
 	unsigned int CalculateGlobalMask() const;
 	unsigned int CalculateLabel() const;
 	void Minimize();
-	void MinimizeAlternative();
 	void SaveDot(FILE* f);
 	float TestDivideByPattern(const Pattern& f);
 	float TestDivideByTable(unsigned int bitstart, unsigned int bitlength);
-	bool DivideByPattern(const Pattern& f);
-	bool DivideByTable(unsigned int bitstart, unsigned int bitlength);
-	
-	
-private:
-
-	//bool CheckUniqueDupes();
-	//void FindMinPattern(const Pattern& f, divcontext* minctx);
+	bool DivideByPattern(unsigned int* idgen, const Pattern& f);
+	bool DivideByTable(unsigned int* idgen, unsigned int bitstart, unsigned int bitlength);
+	void BuildExportQueue(std::vector<RuleSet*>* queue);
+	void ExportNode(LangExporter* exporter, LabelSet* labelset);
+	void ExportTables(LangExporter* exporter, LabelSet* labelset);
 
 private:
 	float mGamma;
