@@ -18,18 +18,13 @@ void PatternSet::Clear()
 {
 	unsigned int i;
 
-	if (mPatterns)
+	for(i=0; i<mPatterns.size(); i++)
 	{
-		for(i=0; i<mPatterns->size(); i++)
-		{
-			Pattern* pat = (*mPatterns)[i];
-			delete pat;
-		}
-
-		mPatterns->clear();
-		delete mPatterns;
-		mPatterns = 0;
+		Pattern* pat = mPatterns[i];
+		delete pat;
 	}
+
+	mPatterns.clear();
 }
 
 void PatternSet::Copy(const PatternSet& set)
@@ -38,13 +33,10 @@ void PatternSet::Copy(const PatternSet& set)
 
 
 	Clear();
-
-	if (set.mPatterns == 0)
-		return;
 	
-	for(i=0; i<set.mPatterns->size(); i++)
+	for(i=0; i<set.mPatterns.size(); i++)
 	{
-		Pattern* pat = (*set.mPatterns)[i];
+		Pattern* pat = set.mPatterns[i];
 		
 		Add(*pat);
 	}
@@ -55,57 +47,38 @@ void PatternSet::Add(const Pattern& pat)
 {
 	Pattern* p = new Pattern(pat);
 
-	if (mPatterns == 0)
-		mPatterns = new std::vector<Pattern*>();
 
-	mPatterns->push_back(p);
-}
-
-void PatternSet::Add(const char* str)
-{
-	Pattern p;
-
-	p.Parse(str);
-
-	Add(p);
-}
-
-
-void PatternSet::Intersect(const PatternSet& a, const PatternSet& b)
-{
-	Clear();
-	mPatterns = _Intersect(a, b);
+	mPatterns.push_back(p);
 }
 
 void PatternSet::Intersect(const PatternSet& set)
 {
-	std::vector<Pattern*>* pats = _Intersect(*this, set);
+	PatternSet tmp;
 
-	Clear();
-
-	mPatterns = pats;
+	tmp.Intersect(*this, set);
+	
+	tmp.mPatterns.swap(mPatterns);
 }
 
-std::vector<Pattern*>* PatternSet::_Intersect(const PatternSet& a, const PatternSet& b)
+void PatternSet::Intersect(const PatternSet& a, const PatternSet& b)
 {
 	unsigned int j;
 	unsigned int i;
 	unsigned int mask;
 	unsigned int sig;
 
-	if (a.mPatterns == 0 || b.mPatterns == 0)
-		return 0;
 
-	std::vector<Pattern*>* set = new std::vector<Pattern*>();
+	Clear();
 
-	for(j=0; j<a.mPatterns->size(); j++)
+
+	for(j=0; j<a.mPatterns.size(); j++)
 	{
-		Pattern* pa = (*a.mPatterns)[j];
+		Pattern* pa = a.mPatterns[j];
 		
 
-		for(i=0; i<b.mPatterns->size(); i++)
+		for(i=0; i<b.mPatterns.size(); i++)
 		{
-			Pattern* pb = (*b.mPatterns)[i];
+			Pattern* pb = b.mPatterns[i];
 
 			mask = pa->Mask() & pb->Mask();
 
@@ -119,38 +92,33 @@ std::vector<Pattern*>* PatternSet::_Intersect(const PatternSet& a, const Pattern
 				p->SetSignature( sig & mask );
 				p->SetMask( mask );
 
-				set->push_back(p);
+				mPatterns.push_back(p);
 			}
 		}
 	}
-
-	return set;
 }
 
 void PatternSet::Complement(const PatternSet& set)
 {
-	PatternSet tmp;
 	unsigned int i;
+	PatternSet tmp;
 
-	if (set.mPatterns == 0)
-		return;
 
-	for(i=0; i<set.mPatterns->size(); i++)
+	for(i=0; i<set.mPatterns.size(); i++)
 	{
-		Pattern* p = (*set.mPatterns)[i];
+		Pattern* p = set.mPatterns[i];
 		
-		tmp.Clear();
-		tmp.Complement(*p);
-
 		if (i == 0)
 		{
-			Copy(tmp);
+			Complement(*p);
 		}
 		else
 		{
+			tmp.Complement(*p);
 			Intersect(tmp);
 		}
 	}
+
 
 	Minimize();
 }
@@ -164,6 +132,8 @@ void PatternSet::Complement(const Pattern& pat)
 	unsigned int tmask = mask & (nmask + 1);
 	unsigned int smask = mask;
 
+
+	Clear();
 
 	for(i=0; i<patterncount; i++)
 	{
@@ -186,12 +156,10 @@ void PatternSet::Print()
 {
 	unsigned int i;
 
-	if (mPatterns == 0)
-		return;
 
-	for(i=0; i<mPatterns->size(); i++)
+	for(i=0; i<mPatterns.size(); i++)
 	{
-		Pattern* p = (*mPatterns)[i];
+		Pattern* p = mPatterns[i];
 
 		p->Print();
 	}
@@ -207,14 +175,14 @@ void PatternSet::Minimize()
 
 	for(k=0; k<32; k++)
 	{
-		for(j=0; j<mPatterns->size(); j++)
+		for(j=0; j<mPatterns.size(); j++)
 		{
-			Pattern* a = (*mPatterns)[j];
+			Pattern* a = mPatterns[j];
 
 			i = j+1;
-			while(i < mPatterns->size())
+			while(i < mPatterns.size())
 			{
-				Pattern* b = (*mPatterns)[i];
+				Pattern* b = mPatterns[i];
 
 				mask = (a->Signature() & a->Mask()) ^ (b->Signature() & b->Mask());
 
@@ -222,7 +190,7 @@ void PatternSet::Minimize()
 				{
 					a->SetSignature( a->Signature() & b->Signature() );
 					a->SetMask( a->Mask() ^ mask );
-					mPatterns->erase( mPatterns->begin() + i );
+					mPatterns.erase( mPatterns.begin() + i );
 					delete b;
 				}
 				else
@@ -232,4 +200,64 @@ void PatternSet::Minimize()
 			}
 		}
 	}
+}
+
+bool PatternSet::HasOverlap() const
+{
+	unsigned int i;
+	unsigned int j;
+	unsigned int commonmask;
+
+
+	for(i=0; i<mPatterns.size(); i++)
+	{
+		Pattern* pa = mPatterns[i];
+
+
+		for(j=i+1; j<mPatterns.size(); j++)
+		{
+			Pattern* pb = mPatterns[j];
+
+			commonmask = pa->Mask() & pb->Mask();
+
+			if ( (pa->Signature() & commonmask) == (pb->Signature() & commonmask) )
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+
+bool PatternSet::Expand(const PatternSet& set)
+{
+	unsigned int i, j;
+	PatternSet tmp;
+	Pattern pn;
+
+
+	// for each pattern in *this, merge with all patterns in set
+	for(i=0; i<mPatterns.size(); i++)
+	{
+		Pattern* pa = mPatterns[i];
+
+		for(j=0; j<set.mPatterns.size(); j++)
+		{
+			Pattern* pb = set.mPatterns[j];
+
+			if (pa->Mask() & pb->Mask())
+				return false;
+
+			pn.SetSignature(pa->Signature() | pb->Signature());
+			pn.SetMask(pa->Mask() | pb->Mask());
+
+			tmp.Add(pn);
+		}
+	}
+
+	tmp.mPatterns.swap(mPatterns);
+
+	return true;
 }

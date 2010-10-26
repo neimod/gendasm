@@ -7,42 +7,22 @@
 
 int main(int argc, char* argv[])
 {
-	RuleSet ruleset;
-	LabelSet labelset;
-	Scratchpad scratchpad;
+	//RuleSet ruleset;
+	//LabelSet labelset;
+	//Scratchpad scratchpad;
 	SpecFile specfile;
-	CSrcExporter csrcexporter;
+	//CSrcExporter csrcexporter;
 
-	specfile.Load("armv4.def");
-
-	ruleset.SetGamma(9.0f);
-	ruleset.SetScratchpad(&scratchpad);
-	specfile.LoadRules(&ruleset, &labelset);
-
-	if (ruleset.CheckOverlap(&labelset))
+	//specfile.Load("armv4.def");
+	if (false == specfile.Load("armv4.xml"))
 	{
-		fprintf(stderr, "Caught error, stopping.\n");
 		return -1;
 	}
 
-	ruleset.CalculateUndefined(&labelset);
 
-	ruleset.Print();
+	specfile.SaveDot("tree.dot");
 
-
-	if (false == ruleset.Divide())
-	{
-		fprintf(stderr, "Caught error, stopping.\n");
-		return -1;
-	}
-
-	ruleset.SaveDot("tree.dot");
-
-
-	csrcexporter.SetOutput("src.c");
-	csrcexporter.SetSpecFile(&specfile);
-
-	ruleset.Export(&csrcexporter, &labelset);
+	specfile.Export("src.c");
 	
 	return 0;
 }

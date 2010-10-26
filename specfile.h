@@ -2,8 +2,12 @@
 #define _SPECFILE_H_
 
 #include <string>
+#include "tinyxml.h"
 #include "ruleset.h"
 #include "labelset.h"
+#include "macropatternset.h"
+#include "scratchpad.h"
+#include "langexporter.h"
 
 
 class SpecFile
@@ -20,25 +24,36 @@ public:
 	~SpecFile();
 
 	void Clear();
-	void Load(const char* filepath);
-	bool LoadRules(RuleSet* rules, LabelSet* labels);
-
-	const std::string& RootFunctionName() const { return mRootName; }
+	bool Load(const char* filepath);
+	void SaveDot(const char* filepath);
+	void Export(const char* filepath);
 	
-	unsigned int CodeTextLineCount() const { return mCodeText.size(); }
-	char* FetchCodeText(unsigned int line, unsigned int* size);
+
+	const std::string& RootFunctionName() const { return mFuncRoot; }
+	
+private:
+	bool LoadMacroPatterns(TiXmlHandle spec);
+	bool LoadRules(TiXmlHandle spec);
+	bool LoadPattern(unsigned int label, const char* buf, unsigned int size);
+	bool ExpandMacro(PatternSet* patset, const char* macro, unsigned int macrosize);
+	bool ParseBitstring(const char* buf, unsigned int size, Pattern* pattern);
+	bool ExportTemplate(const char* filepath, LangExporter* exporter);
 
 private:
-	void ParseConfig();
 
-private:
-	std::vector<Line*> mPatternText;
-	std::vector<Line*> mConfigText;
-	std::vector<Line*> mCodeText;
+	std::string mLanguage;
+	std::string mFuncRoot;
+	std::string mFuncVarsDef;
+	std::string mFuncVarsCall;
+	std::string mFuncUndef;
+	std::string mFuncStub;
+	std::string mFuncTable;
+	std::string mTemplate;
 
-	unsigned int mSize;
-	char* mData;
-	std::string mRootName;
+	MacroPatternSet mMacroPatterns;
+	LabelSet mLabels;
+	RuleSet mRules;
+	Scratchpad mScratchpad;
 };
 
 #endif // _SPECFILE_H_

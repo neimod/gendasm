@@ -41,6 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
+				AdditionalIncludeDirectories="tinyxml"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -60,7 +61,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="tinyxmld.lib"
 				LinkIncremental="2"
+				AdditionalLibraryDirectories="tinyxml"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				TargetMachine="1"
@@ -114,6 +117,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
+				AdditionalIncludeDirectories="tinyxml"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -132,7 +136,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="tinyxml.lib"
 				LinkIncremental="1"
+				AdditionalLibraryDirectories="tinyxml"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				OptimizeReferences="2"
@@ -183,6 +189,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\macropatternset.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\main.cpp"
 				>
 			</File>
@@ -226,6 +236,10 @@
 			</File>
 			<File
 				RelativePath=".\langexporter.h"
+				>
+			</File>
+			<File
+				RelativePath=".\macropatternset.h"
 				>
 			</File>
 			<File

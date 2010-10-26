@@ -25,10 +25,12 @@ public:
 	RuleSet();
 	~RuleSet();
 
-	void CalculateUndefined(LabelSet* labelset);
+	void Clear();
+	void CalculateUndefined(unsigned int label);
 
 	void Export(LangExporter* exporter, LabelSet* labelset);
 	
+	void Minimize();
 	bool Divide();
 	void Add(const Rule& rule);
 	void Print();
@@ -40,11 +42,14 @@ public:
 	void SetScratchpad(Scratchpad* scratchpad) { mScratchpad = scratchpad; }
 	void SetGamma(float gamma) { mGamma = gamma; }	
 
+	bool IsSimilar(RuleSet* set);
+	void ReduceSimilarSubtrees();
+
 private:
 	bool Divide(unsigned int* idgen);
 	unsigned int CalculateGlobalMask() const;
 	unsigned int CalculateLabel() const;
-	void Minimize();
+	
 	void SaveDot(FILE* f);
 	float TestDivideByPattern(const Pattern& f);
 	float TestDivideByTable(unsigned int bitstart, unsigned int bitlength);
@@ -53,6 +58,7 @@ private:
 	void BuildExportQueue(std::vector<RuleSet*>* queue);
 	void ExportNode(LangExporter* exporter, LabelSet* labelset);
 	void ExportTables(LangExporter* exporter, LabelSet* labelset);
+	void BuildNodeTable(std::vector<RuleSet*>* table);
 
 private:
 	float mGamma;
@@ -62,10 +68,11 @@ private:
 	Pattern mDivPattern;
 	unsigned int mDivTableStart;
 	unsigned int mDivTableLength;
-	unsigned int mChildCount;
-	RuleSet* mChildren;
+	std::vector<RuleSet*> mChildren;
 	unsigned int mLabel;
 	unsigned int mNode;
+	RuleSet* mRedirect;
+	bool mStub;
 };
 
 #endif // _RULESET_H_

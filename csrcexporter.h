@@ -12,8 +12,6 @@ public:
 	CSrcExporter();
 	~CSrcExporter();
 
-	void SetOutput(const char* filepath) { mPath = filepath; }
-	void SetSpecFile(SpecFile* specfile) { mSpecFile = specfile; }
 
 	virtual bool Begin();
 	virtual void End();	
@@ -25,6 +23,7 @@ public:
 	virtual void VisitLabelEntry(const std::string& label);
 	virtual void VisitStubEntry(unsigned int id);
 	virtual void EndTable();
+	virtual void VisitStub(unsigned int id);
 	virtual void VisitLabel(const std::string& label);
 	virtual void VisitPattern(unsigned int mask, unsigned int signature);
 	virtual void BeginTrueBranch();
@@ -37,9 +36,6 @@ private:
 	void Indent(unsigned int count);
 private:
 	unsigned int mIndent;
-	std::string mPath;
-	FILE* mFile;
-	SpecFile* mSpecFile;
 };
 
 #endif // _LANGEXPORTER_H_

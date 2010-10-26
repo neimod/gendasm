@@ -1,6 +1,13 @@
 #include "labelset.h"
 
-static std::string nullstub = "nullstub";
+LabelSet::LabelSet(): mNullsub("nullsub")
+{
+}
+
+LabelSet::~LabelSet()
+{
+	Clear();
+}
 
 void LabelSet::Clear()
 {
@@ -49,7 +56,7 @@ unsigned int LabelSet::Find(const char* name) const
 const std::string& LabelSet::Lookup(unsigned int label) const
 {
 	if (label == ~1)
-		return nullstub;
+		return mNullsub;
 	return mNodes[label]->name;
 }
 

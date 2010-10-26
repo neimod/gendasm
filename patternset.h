@@ -7,7 +7,7 @@
 class PatternSet
 {
 public:
-	PatternSet(): mPatterns(0) {}
+	PatternSet() {}
 	~PatternSet() { Clear(); }
 
 	bool Load(const char* filepath);
@@ -15,21 +15,23 @@ public:
 	void Clear();
 	void Add(const Pattern& pat);
 	void Add(const char* str);
-	void Intersect(const PatternSet& a, const PatternSet& b);
 	void Intersect(const PatternSet& set);
 	void Print(void);
-	void Complement(const PatternSet& pat);
+	void Complement(const PatternSet& set);
 	void Complement(const Pattern& pat);
-
-	Pattern* Lookup(unsigned int i) const { return (*mPatterns)[i]; }
-	unsigned int Size() const { return mPatterns? mPatterns->size() : 0; }
-
-private:
 	void Minimize(void);
-	std::vector<Pattern*>* _Intersect(const PatternSet& a, const PatternSet& b);
+	bool HasOverlap() const;
+	bool Expand(const PatternSet& set);
+
+	Pattern* Lookup(unsigned int i) const { return mPatterns[i]; }
+	unsigned int Size() const { return mPatterns.size(); }
 
 private:
-	std::vector<Pattern*>* mPatterns;
+	
+	void Intersect(const PatternSet& a, const PatternSet& b);
+
+private:
+	std::vector<Pattern*> mPatterns;
 };
 
 #endif // _PATTERNSET_H_

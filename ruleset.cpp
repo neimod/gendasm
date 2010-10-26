@@ -49,11 +49,16 @@ bool RuleSetSortPredicate(Rule* a, Rule* b)
   return a->Label() < b->Label();
 }
 
-RuleSet::RuleSet(): mChildren(0), mChildCount(0), mScratchpad(0), mGamma(9.0f), mLabel(0)
+RuleSet::RuleSet(): mScratchpad(0), mGamma(9.0f), mLabel(0), mRedirect(0), mStub(false)
 {
 }
 
 RuleSet::~RuleSet()
+{
+	Clear();
+}
+
+void RuleSet::Clear()
 {
 	unsigned int i;
 
@@ -68,13 +73,17 @@ RuleSet::~RuleSet()
 	mRules.clear();
 
 
-	if (mChildren)
+	for(i=0; i<mChildren.size(); i++)
 	{
-		delete[] mChildren;
+		RuleSet* child = mChildren[i];
+
+		delete child;
 	}
 
-	mChildren = 0;
-	mChildCount = 0;
+	mChildren.clear();
+
+	mRedirect = 0;
+	mStub = false;
 }
 
 void RuleSet::Add(const Rule& rule)
@@ -117,7 +126,7 @@ unsigned int RuleSet::CalculateLabel() const
 	return label;
 }
 
-void RuleSet::CalculateUndefined(LabelSet* labelset)
+void RuleSet::CalculateUndefined(unsigned int label)
 {
 	PatternSet defined;
 	PatternSet undefined;
@@ -139,7 +148,6 @@ void RuleSet::CalculateUndefined(LabelSet* labelset)
 
 	if (undefined.Size() != 0)
 	{
-		unsigned int label = labelset->Add("undefined");
 		
 		for(i=0; i<undefined.Size(); i++)
 		{
@@ -195,6 +203,105 @@ bool RuleSet::CheckOverlap(LabelSet* labels)
 	}
 
 	return result;
+}
+
+
+bool RuleSet::IsSimilar(RuleSet* set)
+{
+	unsigned int i;
+
+	if (mChildren.size() != set->mChildren.size())
+		return false;
+
+	if (mChildren.size() == 0)
+		return mLabel == set->mLabel;
+
+	if (mDivType != set->mDivType)
+		return false;
+
+	if (mDivType == DIV_PATTERN)
+	{
+		if (mDivPattern.Mask() != set->mDivPattern.Mask())
+			return false;
+		if (mDivPattern.Signature() != set->mDivPattern.Signature())
+			return false;
+	}
+	else if (mDivType == DIV_TABLE)
+	{
+		if (mDivTableStart != set->mDivTableStart)
+			return false;
+	
+		if (mDivTableLength != set->mDivTableLength)
+			return false;
+	}
+	else
+	{
+		return false;
+	}
+
+
+	for(i=0; i<mChildren.size(); i++)
+	{
+		RuleSet* childa = mChildren[i];
+		RuleSet* childb = set->mChildren[i];
+
+		if (childa->IsSimilar(childb) == false)
+			return false;
+	}
+
+	return true;
+}
+
+
+void RuleSet::BuildNodeTable(std::vector<RuleSet*>* table)
+{
+	unsigned int i;
+
+
+	table->push_back(this);
+
+	for(i=0; i<mChildren.size(); i++)
+	{
+		RuleSet* child = mChildren[i];
+
+		child->BuildNodeTable(table);
+	}
+}
+
+void RuleSet::ReduceSimilarSubtrees()
+{
+	std::vector<RuleSet*> table;
+	unsigned int i, j;
+
+
+	BuildNodeTable(&table);
+
+	for(i=0; i<table.size(); i++)
+	{
+		RuleSet* a = table[i];
+
+		if (a->mRedirect)
+			continue;
+
+		for(j=i+1; j<table.size(); j++)
+		{
+			RuleSet* b = table[j];
+
+			if (b->mRedirect)
+				continue;
+
+			if (a->IsSimilar(b) && a->mChildren.size())
+			{
+				//printf("Node %d similar to node %d.\n", a->mNode, b->mNode);
+
+				// Node b will be redirected to node a.
+				b->mRedirect = a;
+				a->mStub = true;
+			}
+		}
+	}
+
+	//RemoveRedirectedSubtrees();
 }
 
 
@@ -352,14 +459,19 @@ bool RuleSet::DivideByPattern(unsigned int* idgen, const Pattern& f)
 		return false;
 	}
 
-	mChildren = new RuleSet[2];
-	mChildCount = 2;
+	mChildren.reserve(2);
 
-	RuleSet* left = &mChildren[0];
-	RuleSet* right = &mChildren[1];
+	RuleSet* left = new RuleSet;
+	RuleSet* right = new RuleSet;
+
+	mChildren.push_back(left);
+	mChildren.push_back(right);
 
 	left->SetScratchpad(mScratchpad);
+	left->SetGamma(mGamma);
+
 	right->SetScratchpad(mScratchpad);
+	right->SetGamma(mGamma);
 
 
 	for(i=0; i<mRules.size(); i++)
@@ -440,14 +552,16 @@ bool RuleSet::DivideByTable(unsigned int* idgen, unsigned int bitstart, unsigned
 	count = (1<<bitlength);
 	mask = (count-1) << bitstart;
 	
-	mChildren = new RuleSet[count];
-	mChildCount = count;
+	mChildren.reserve(count);
 
-	for(i=0; i<mChildCount; i++)
+	for(i=0; i<count; i++)
 	{
-		RuleSet* set = &mChildren[i];
+		RuleSet* set =  new RuleSet;
+
+		mChildren.push_back(set);
 
 		set->SetScratchpad(mScratchpad);
+		set->SetGamma(mGamma);
 	}
 
 
@@ -471,15 +585,15 @@ bool RuleSet::DivideByTable(unsigned int* idgen, unsigned int bitstart, unsigned
 			r.SetSignature(rule->Signature() | (fillsig & fillmask));
 
 			index = (r.Signature()&mask) >> bitstart;
-			mChildren[index].Add(r);
+			mChildren[index]->Add(r);
 
 			fillsig = (fillsig+1) | fillnmask;
 		}
 	}
 
-	for(i=0; i<mChildCount; i++)
+	for(i=0; i<mChildren.size(); i++)
 	{
-		RuleSet* set = &mChildren[i];
+		RuleSet* set = mChildren[i];
 
 
 		if (false == set->Divide(idgen))
@@ -711,7 +825,7 @@ void RuleSet::SaveDot(FILE* f)
 	unsigned int i;
 
 
-	if (mChildCount == 0)
+	if (mChildren.size() == 0)
 	{
 		fprintf(f, "n%d [label=\"%d\"];\n", mNode, mLabel);
 	}
@@ -720,7 +834,7 @@ void RuleSet::SaveDot(FILE* f)
 		if (mDivType == DIV_PATTERN)
 		{
 			bool first = true;
-			fprintf(f, "n%d [label=\"P(", mNode);
+			fprintf(f, "n%d [label=\"%d-P(", mNode,mNode);
 			for(i=0; i<32; i++)
 			{
 				if ( mDivPattern.Mask() & (1<<i) )
@@ -740,15 +854,18 @@ void RuleSet::SaveDot(FILE* f)
 		}
 		else if (mDivType == DIV_TABLE)
 		{
-			fprintf(f, "n%d [label=\"T(%d,%d)\"];\n", mNode, mDivTableStart, mDivTableLength);
+			fprintf(f, "n%d [label=\"%d-T(%d,%d)\"];\n", mNode, mNode, mDivTableStart, mDivTableLength);
 		}
 	}
 
 	if (mDivType == DIV_PATTERN)
 	{
-		for(i=0; i<mChildCount; i++)
+		for(i=0; i<mChildren.size(); i++)
 		{
-			RuleSet* child = &mChildren[i];
+			RuleSet* child = mChildren[i];
+
+			if (child->mRedirect)
+				child = child->mRedirect;
 
 			if (i == 0)
 				fprintf(f, "n%d -> n%d [label=\"Y\"];\n", mNode, child->mNode);
@@ -758,19 +875,23 @@ void RuleSet::SaveDot(FILE* f)
 	}
 	else if (mDivType == DIV_TABLE)
 	{
-		for(i=0; i<mChildCount; i++)
+		for(i=0; i<mChildren.size(); i++)
 		{
-			RuleSet* child = &mChildren[i];
+			RuleSet* child = mChildren[i];
+
+			if (child->mRedirect)
+				child = child->mRedirect;
 
 			fprintf(f, "n%d -> n%d [label=\"%d\"];\n", mNode, child->mNode, i);
 		}
 	}
 
-	for(i=0; i<mChildCount; i++)
+	for(i=0; i<mChildren.size(); i++)
 	{
-		RuleSet* child = &mChildren[i];
+		RuleSet* child = mChildren[i];
 
-		child->SaveDot(f);
+		if (child->mRedirect == 0)
+			child->SaveDot(f);
 	}
 }
 
@@ -854,35 +975,42 @@ void RuleSet::ExportTables(LangExporter* exporter, LabelSet* labelset)
 	unsigned int i;
 
 
-	if (mChildCount == 0)
+	if (mChildren.size() == 0)
+		return;
+
+	if (mRedirect)
 		return;
 
 	if (mDivType == DIV_TABLE)
 	{
-		for(i=0; i<mChildCount; i++)
+		for(i=0; i<mChildren.size(); i++)
 		{
-			RuleSet* child = &mChildren[i];
+			RuleSet* child = mChildren[i];
 
-			if (child->mChildCount != 0)
+			if (child->mChildren.size() != 0 && child->mRedirect == 0)
+			{
 				exporter->VisitStubPrototype(child->mNode);
+			}
 		}
 
-		exporter->BeginTable(mNode, mChildCount);
-		for(i=0; i<mChildCount; i++)
+		exporter->BeginTable(mNode, mChildren.size());
+		for(i=0; i<mChildren.size(); i++)
 		{
-			RuleSet* child = &mChildren[i];
+			RuleSet* child = mChildren[i];
 
-			if (child->mChildCount == 0)
+			if (child->mChildren.size() == 0)
 				exporter->VisitLabelEntry(labelset->Lookup(child->mLabel));
+			else if (child->mRedirect)
+				exporter->VisitStubEntry(child->mRedirect->mNode);
 			else
 				exporter->VisitStubEntry(child->mNode);
 		}
 		exporter->EndTable();
 	}
 
-	for(i=0; i<mChildCount; i++)
+	for(i=0; i<mChildren.size(); i++)
 	{
-		RuleSet* child = &mChildren[i];
+		RuleSet* child = mChildren[i];
 
 		child->ExportTables(exporter, labelset);
 	}
@@ -892,7 +1020,7 @@ void RuleSet::ExportTables(LangExporter* exporter, LabelSet* labelset)
 
 void RuleSet::ExportNode(LangExporter* exporter, LabelSet* labelset)
 {
-	if (mChildCount == 0)
+	if (mChildren.size() == 0)
 	{
 		exporter->VisitLabel(labelset->Lookup(mLabel));
 	}
@@ -900,12 +1028,26 @@ void RuleSet::ExportNode(LangExporter* exporter, LabelSet* labelset)
 	{
 		if (mDivType == DIV_PATTERN)
 		{
+			RuleSet* left = mChildren[0];
+			RuleSet* right = mChildren[1];
+
+
 			exporter->VisitPattern(mDivPattern.Mask(), mDivPattern.Signature());
 			exporter->BeginTrueBranch();
-			mChildren[0].ExportNode(exporter, labelset);
+			if (left->mStub)
+				exporter->VisitStub(left->mNode);
+			else if (left->mRedirect)
+				exporter->VisitStub(left->mRedirect->mNode);
+			else
+				left->ExportNode(exporter, labelset);
 			exporter->EndTrueBranch();
 			exporter->BeginFalseBranch();
-			mChildren[1].ExportNode(exporter, labelset);
+			if (right->mStub)
+				exporter->VisitStub(right->mNode);
+			else if (right->mRedirect)
+				exporter->VisitStub(right->mRedirect->mNode);
+			else
+				right->ExportNode(exporter, labelset);
 			exporter->EndFalseBranch();
 		}
 		else if (mDivType == DIV_TABLE)
@@ -922,23 +1064,34 @@ void RuleSet::BuildExportQueue(std::vector<RuleSet*>* queue)
 	unsigned int i;
 
 
-	if (mChildCount == 0)
+	if (mChildren.size() == 0)
+		return;
+
+	if (mStub)
+	{
+		queue->push_back(this);
+	}
+
+	if (mRedirect)
 		return;
 
 	if (mDivType == DIV_TABLE)
 	{
-		for(i=0; i<mChildCount; i++)
+		for(i=0; i<mChildren.size(); i++)
 		{
-			RuleSet* child = &mChildren[i];
+			RuleSet* child = mChildren[i];
 
-			if (child->mChildCount != 0)
+			if (child->mRedirect)
+				continue;
+
+			if (child->mChildren.size() != 0)
 				queue->push_back(child);
 		}
 	}
 
-	for(i=0; i<mChildCount; i++)
+	for(i=0; i<mChildren.size(); i++)
 	{
-		RuleSet* child = &mChildren[i];
+		RuleSet* child = mChildren[i];
 
 		child->BuildExportQueue(queue);
 	}

@@ -1,8 +1,42 @@
 #include "specfile.h"
+#include "csrcexporter.h"
+
+typedef struct
+{
+	const char* text;
+	unsigned int id;
+	unsigned int index;
+} keyword;
+
+typedef enum
+{
+	KEYWORD_DECODER,
+} KeywordIds;
+
+keyword keywords[1]=
+{
+	{"%GENDASM.DECODER%", KEYWORD_DECODER, 0},
+};
+
+static void FetchTextFromNode(TiXmlHandle node, std::string* str)
+{
+	TiXmlElement* elem = node.ToElement();
+
+	
+	str->clear();
+
+	if (elem)
+	{
+		const char* text = elem->GetText();
+
+		
+		if (text)
+			str->assign(text);
+	}
+}
 
 
-
-SpecFile::SpecFile(): mSize(0), mData(0)
+SpecFile::SpecFile()
 {
 }
 
@@ -13,301 +47,474 @@ SpecFile::~SpecFile()
 
 void SpecFile::Clear()
 {
-	unsigned int i;
-
-
-	if (mData)
-		delete[] mData;
-
-	mData = 0;
-	mSize = 0;
-
-
-	for(i=0; i<mPatternText.size(); i++)
-	{
-		Line* line = mPatternText[i];
-		delete line;
-	}
-
-	for(i=0; i<mConfigText.size(); i++)
-	{
-		Line* line = mConfigText[i];
-
-		delete line;
-	}
-
-	for(i=0; i<mCodeText.size(); i++)
-	{
-		Line* line = mCodeText[i];
-
-		delete line;
-	}
 }
 
-void SpecFile::Load(const char* filepath)
+
+bool SpecFile::LoadMacroPatterns(TiXmlHandle spec)
 {
-	FILE* f;
-	unsigned char buf[4096];
-	unsigned int count = 0;
-	unsigned int linenum = 1;
-	unsigned int start;
-	unsigned int end;
-	unsigned int section = 0;
-	unsigned int i;
-	unsigned int j;
-
+	TiXmlElement* macropatternnode = spec.FirstChild("MACROPATTERN").ToElement();
+	TiXmlElement* itemnode;
+	PatternSet* macropattern;
+	const char* name;
+	const char* bitstring;
 	
-	f = fopen(filepath, "r");
+	
+	mMacroPatterns.Clear();
 
-	if (!f)
-		return;
 
-	mSize = 0;
-
-	while(!feof(f))
+	while(macropatternnode)
 	{
-		count = fread(buf, 1, sizeof(buf), f);
+		itemnode = macropatternnode->FirstChildElement("ITEM");
+		name = macropatternnode->Attribute("name");
+		
 
-		mSize += count;
-	}
-
-	mData = new char[mSize];
-
-	fseek(f, 0, SEEK_SET);
-	mSize = fread(mData, 1, mSize, f);
-	fclose(f);
-
-	start = 0;
-	end = 0;
-	while(end < mSize)
-	{
-		if (mData[end] == '\n')
+		if (name == 0)
 		{
-			Line* line = new Line;
-
-			if (end - start == 1 && mData[start] == '%')
-			{
-				if (section == 0 || section == 1)
-					section++;
-			}
-			else
-			{
-				line->linenum = linenum;
-				line->size = end - start;
-				line->text = mData + start;
-
-				if (section == 0)
-					mPatternText.push_back(line);
-				else if (section == 1)
-					mConfigText.push_back(line);
-				else
-					mCodeText.push_back(line);
-			}
-
-			
-			end++;
-			start = end;
-			linenum++;
+			fprintf(stderr, "Error: No name for macropattern.\n");
+			return false;
 		}
 		else
 		{
-			end++;
-		}
-	}
-/*
-	printf("[Patterns]\n");
-	for(i=0; i<mPatternText.size(); i++)
-	{
-		Line* line = mPatternText[i];
+			macropattern = mMacroPatterns.Add(name);
 
-		printf("%d |", line->linenum);
-		for(j=0; j<line->size; j++)
-			printf("%c", line->text[j]);
-		printf("|\n");
-	}
-	printf("[Config]\n");
-	for(i=0; i<mConfigText.size(); i++)
-	{
-		Line* line = mConfigText[i];
-
-		printf("%d |", line->linenum);
-		for(j=0; j<line->size; j++)
-			printf("%c", line->text[j]);
-		printf("|\n");
-	}
-	printf("[Code]\n");
-	for(i=0; i<mCodeText.size(); i++)
-	{
-		Line* line = mCodeText[i];
-
-		printf("%d |", line->linenum);
-		for(j=0; j<line->size; j++)
-			printf("%c", line->text[j]);
-		printf("|\n");
-	}
-*/
-
-
-	ParseConfig();
-}
- 
-void SpecFile::ParseConfig()
-{
-	unsigned int i;
-	unsigned int j;
-	char* buf;
-	unsigned int bufsize;
-	char optiontext[4096];
-	char valtext[4096];
-	unsigned int optionsize;
-	unsigned int valsize;
-	unsigned int pos;
-	unsigned int state;
-
-
-	for(i=0; i<mConfigText.size(); i++)
-	{
-		Line* line = mConfigText[i];
-
-		buf = line->text;
-		bufsize = line->size;
-
-		valsize = 0;
-		optionsize = 0;
-		pos = 0;
-		state = 0;
-
-		for(j=0; j<bufsize; j++)
-		{
-			if (state == 0)
+			while(itemnode)
 			{
-				if (buf[j] == '=')
+				bitstring = itemnode->GetText();
+
+				if (bitstring == 0)
 				{
-					state = 1;
-					pos = 0;
+					fprintf(stderr, "Error: No bitstring found for macropattern \"%s\"\n", name);
+					return false;
 				}
-				else if (pos < (sizeof(optiontext)-1))
+				else
 				{
-					optiontext[pos++] = buf[j];
-					optionsize = pos;
+					Pattern pattern;
+
+					pattern.Parse(bitstring);
+					macropattern->Add(pattern);
 				}
+
+				itemnode = itemnode->NextSiblingElement("ITEM");
 			}
-			else
+
+			if (macropattern->HasOverlap())
 			{
-				valtext[pos++] = buf[j];
-				valsize = pos;
-			}
-		}
-
-		optiontext[optionsize] = 0;
-		valtext[valsize] = 0;
-
-		if (!stricmp(optiontext, "root"))
-		{
-			mRootName = valtext;
-		}
-	}
-}
-
-bool SpecFile::LoadRules(RuleSet* rules, LabelSet* labels)
-{
-	FILE* f = 0;
-	char* buf;
-	unsigned int bufsize;
-	unsigned int sig;
-	unsigned int mask;
-	int valid;
-	unsigned int j;
-	unsigned int i;
-	unsigned int namelen;
-	unsigned int label;
-	char name[4096];
-	int fetchname;
-	Rule rule;
-	unsigned int linenum;
-
-
-	for(j=0; j<mPatternText.size(); j++)
-	{
-		Line* line = mPatternText[j];
-
-		buf = line->text;
-		bufsize = line->size;
-		linenum = line->linenum;
-
-		valid = 0;
-		sig = 0;
-		mask = 0;
-		namelen = 0;
-		fetchname = 0;
-
-		for(i=0; i<bufsize && buf[i] != '#'; i++)
-		{
-			switch(buf[i])
-			{
-				case ']':
-					fetchname = 0;
-				break;
+				fprintf(stderr, "Error: Macropattern \"%s\" has overlapping bitstrings.\n", name);
+				return false;
 			}
 
-
-			if (fetchname && (namelen+1) < sizeof(name))
-				name[namelen++] = buf[i];
-
-			switch(buf[i])
-			{
-				case '-': 
-					mask = (mask<<1)|0; 
-					sig = (sig<<1)|0;
-					valid = 1;
-				break;
-				
-				case '1': 
-					mask = (mask<<1)|1; 
-					sig = (sig<<1)|1; 
-					valid = 1;
-				break;
-				
-				case '0': 
-					mask = (mask<<1)|1; 
-					sig = (sig<<1)|0; 
-					valid = 1;
-				break;
-
-				case '[':
-					fetchname = 1;
-				break;
-			}
+			macropattern->Minimize();
 		}
 
-
-		name[namelen] = 0;
-
-		if (valid && namelen > 0)
-		{
-			label = labels->Find(name);
-			if (label == ~0)
-				label = labels->Add(name);
-
-			rule.SetSignature(sig);
-			rule.SetMask(mask);
-			rule.SetLabel(label);
-			rule.SetLineNum(linenum);
-
-			rules->Add(rule);
-		}
+		macropatternnode = macropatternnode->NextSiblingElement("MACROPATTERN");
 	}
 
-//	std::sort(mRules.begin(), mRules.end(), RuleSetSortPredicate);
-//	rules->Print();
+	mMacroPatterns.Print();
 
 	return true;
 }
 
-char* SpecFile::FetchCodeText(unsigned int l, unsigned int* size)
+bool SpecFile::ParseBitstring(const char* buf, unsigned int size, Pattern* pattern)
 {
-	Line* line = mCodeText[l];
+	unsigned int i;
+	unsigned int mask = 0;
+	unsigned int sig = 0;
+	bool valid = false;
 
-	*size = line->size;
-	return line->text;
+
+	for(i=0; i<size; i++)
+	{
+		//printf("%c", buf[i]);
+
+		if (buf[i] == '|')
+			break;
+
+		switch(buf[i])
+		{
+			case '-': 
+				mask = (mask<<1)|0; 
+				sig = (sig<<1)|0;
+				valid = true;
+			break;
+			
+			case '1': 
+				mask = (mask<<1)|1; 
+				sig = (sig<<1)|1; 
+				valid = true;
+			break;
+			
+			case '0': 
+				mask = (mask<<1)|1; 
+				sig = (sig<<1)|0; 
+				valid = true;
+			break;
+		}
+	}
+
+	pattern->SetMask(mask);
+	pattern->SetSignature(sig);
+
+	return valid;
+}
+
+bool SpecFile::ExpandMacro(PatternSet* patset, const char* macro, unsigned int macrosize)
+{
+	PatternSet* set = mMacroPatterns.Find(macro);
+
+	if (!set)
+	{
+		fprintf(stderr, "Error: Macropattern %s not found\n", macro);
+
+		return false;
+	}
+
+	if (false == patset->Expand(*set))
+	{
+		fprintf(stderr, "Error: Macropattern \"%s\" expansion found bits which should be don't care.\n", macro);
+
+		return false;
+	}
+
+	return true;
+}
+
+bool SpecFile::LoadPattern(unsigned int label, const char* buf, unsigned int size)
+{
+	unsigned int i;
+	char macro[4096];
+	unsigned int macrosize = 0;
+	PatternSet patset;
+	Pattern pattern;
+	Rule rule;
+
+
+	if (false == ParseBitstring(buf, size, &pattern))
+		return false;
+
+//	pattern.SetLabel(label);
+
+	patset.Add(pattern);
+
+
+	for(i=0; i<size; i++)
+	{
+		if (buf[i] == '|')
+		{
+			i++;
+			break;
+		}
+	}
+
+	for(; i<size; i++)
+	{
+		//printf("%c", buf[i]);
+
+		int isAlphaNumeric = (buf[i] >= 'A' && buf[i] <= 'Z') || (buf[i] >= 'a' && buf[i] <= 'z') || (buf[i] >= '0' && buf[i] <= '9');
+
+
+		if (macrosize < (sizeof(macro)-1) && isAlphaNumeric)
+		{
+			macro[macrosize] = buf[i];
+			macrosize++;
+			macro[macrosize] = 0;
+		}
+		else if (buf[i] == '|')
+		{
+			if (macrosize)
+			{
+				if (false == ExpandMacro(&patset, macro, macrosize))
+					return false;
+			}
+
+			macrosize = 0;
+		}
+	}
+
+	if (macrosize)
+	{
+		if (false == ExpandMacro(&patset, macro, macrosize))
+			return false;
+	}
+
+	patset.Minimize();
+	if (patset.HasOverlap())
+	{
+		fprintf(stderr, "Error: Pattern after expansion has overlap.\n");
+
+		return false;
+	}
+
+	for(i=0; i<patset.Size(); i++)
+	{
+		Pattern* pat = patset.Lookup(i);
+
+
+		rule.SetSignature(pat->Signature());
+		rule.SetMask(pat->Mask());
+		rule.SetLabel(label);
+
+		mRules.Add(rule);
+	}
+
+	return true;
+}
+
+bool SpecFile::LoadRules(TiXmlHandle spec)
+{
+	TiXmlElement* patternnode = spec.FirstChild("PATTERN").ToElement();
+	while(patternnode)
+	{
+		const char* labelname = patternnode->Attribute("label");
+		const char* buf = patternnode->GetText();
+		unsigned int size;
+		unsigned int label;
+
+
+		if (labelname == 0)
+		{
+			fprintf(stderr, "Error: No label found for pattern.\n");
+		}
+		else if (buf == 0)
+		{
+			fprintf(stderr, "Error: No text for pattern.\n");
+		}
+		else
+		{
+			size = strlen(buf);
+
+			label = mLabels.Find(labelname);
+			if (label == ~0)
+				label = mLabels.Add(labelname);
+
+
+			if (false == LoadPattern(label, buf, size))
+				return false;
+		}
+
+		patternnode = patternnode->NextSiblingElement("PATTERN");
+	}
+
+	return true;
+}
+
+bool SpecFile::Load(const char* filepath)
+{
+	unsigned int undefinedlabel;
+	TiXmlDocument document(filepath);
+
+
+
+	mRules.Clear();
+	mLabels.Clear();
+	mMacroPatterns.Clear();
+
+	mRules.SetScratchpad(&mScratchpad);
+	mRules.SetGamma(2.0f);
+	
+	
+	if (false == document.LoadFile())
+	{
+		fprintf(stderr, "Failed to load %s.\n", filepath);
+
+		return false;
+	}
+
+	TiXmlHandle root(&document);
+	TiXmlHandle spec = root.FirstChild("SPEC");
+
+	FetchTextFromNode(spec.FirstChild("FUNCROOT"), &mFuncRoot);
+	FetchTextFromNode(spec.FirstChild("LANGUAGE"), &mLanguage);
+	FetchTextFromNode(spec.FirstChild("TEMPLATE"), &mTemplate);
+	FetchTextFromNode(spec.FirstChild("FUNCVARSDEF"), &mFuncVarsDef);
+	FetchTextFromNode(spec.FirstChild("FUNCVARSCALL"), &mFuncVarsCall);
+	FetchTextFromNode(spec.FirstChild("FUNCUNDEF"), &mFuncUndef);
+	FetchTextFromNode(spec.FirstChild("FUNCSTUB"), &mFuncStub);
+	FetchTextFromNode(spec.FirstChild("FUNCTABLE"), &mFuncTable);
+
+
+
+	printf("Function root: %s\n", mFuncRoot.c_str());
+	printf("Function vars def: %s\n", mFuncVarsDef.c_str());
+	printf("Function vars call: %s\n", mFuncVarsCall.c_str());
+	printf("Function undef: %s\n", mFuncUndef.c_str());
+	printf("Language: %s\n", mLanguage.c_str());
+	printf("Template: %s\n", mTemplate.c_str());
+	
+	if (false == LoadMacroPatterns(spec))
+		return false;
+
+	if (false == LoadRules(spec))
+		return false;
+
+	if (mRules.CheckOverlap(&mLabels))
+		return false;
+
+	undefinedlabel = mLabels.Add(mFuncUndef.c_str());
+	mRules.CalculateUndefined(undefinedlabel);
+
+	mRules.Minimize();
+
+	mRules.Print();
+	
+	if (false == mRules.Divide())
+		return false;
+
+	mRules.ReduceSimilarSubtrees();
+
+	return true;
+}
+ 
+void SpecFile::SaveDot(const char* filepath)
+{
+	mRules.SaveDot(filepath);
+}
+
+void SpecFile::Export(const char* filepath)
+{
+	CSrcExporter csrcexporter;
+	LangExporter* exporter = 0;
+
+
+
+	if (mLanguage.compare("C") == 0)
+		exporter = &csrcexporter;
+
+	if (exporter == 0)
+	{
+		fprintf(stderr, "Error: Unknown language \"%s\" used for exporting.\n", mLanguage.c_str());
+		return;
+	}
+
+	exporter->SetFuncRoot(mFuncRoot);
+	exporter->SetFuncVarsDef(mFuncVarsDef);
+	exporter->SetFuncVarsCall(mFuncVarsCall);
+	exporter->SetFuncStub(mFuncStub);
+	exporter->SetFuncTable(mFuncTable);
+	ExportTemplate(filepath, exporter);
+}
+
+bool SpecFile::ExportTemplate(const char* filepath, LangExporter* exporter)
+{
+	char buf[4096];
+	int readbytes;
+	unsigned int i, j;
+	unsigned int templatesize;
+	FILE* ftpl = 0;
+	FILE* fout = 0;
+	unsigned int keywordcount;
+	bool keywordchar;
+	unsigned int keywordid;
+	unsigned int writesizepending;
+	unsigned int writesize;
+	unsigned int writepos;
+	
+
+	keywordcount = sizeof(keywords) / sizeof(keywords[0]);
+
+	ftpl = fopen(mTemplate.c_str(), "r");
+	fout = fopen(filepath, "w");
+	if (ftpl == 0)
+	{
+		fprintf(stderr, "Error: Unable to open template file \"%s\".\n", mTemplate.c_str());
+		return false;
+	}
+	else if (fout == 0)
+	{
+		fprintf(stderr, "Error: Unable to open output file \"%s\".\n", filepath);
+		return false;
+	}
+	else
+	{
+		exporter->SetFile(fout);
+
+		templatesize = 0;
+
+		while(1)
+		{
+			readbytes = fread(buf, 1, sizeof(buf), ftpl);
+
+			if (readbytes<=0)
+				break;
+
+			templatesize += readbytes;
+		}
+
+		char* templatebuf = new char[templatesize];
+
+		fseek(ftpl, 0, SEEK_SET);
+		fread(templatebuf, 1, templatesize, ftpl);
+
+
+		writesize = 0;
+		writesizepending = 0;
+		writepos = 0;
+		
+		for(i=0; i<templatesize; i++)
+		{
+			keywordchar = false;
+			keywordid = ~0;
+
+			for(j=0; j<keywordcount; j++)
+			{
+				const char* keytext = keywords[j].text;
+				unsigned int pos = keywords[j].index;
+
+				if (templatebuf[i] != keytext[pos])
+				{
+					pos = 0;
+				}
+				else
+				{
+					pos++;
+					keywordchar = true;
+
+					if (keytext[pos] == 0)
+					{
+						pos = 0;
+						keywordid = keywords[j].id;
+					}
+				}
+
+				keywords[j].index = pos;
+			}
+		
+			if (!keywordchar)
+			{
+				writesize+=writesizepending+1;
+				writesizepending=0;
+			}
+			else
+			{
+				writesizepending++;
+			}
+
+			if (keywordid != ~0)
+			{
+				fwrite(templatebuf+writepos, 1, writesize, fout);
+				writepos += writesize+writesizepending;
+				writesizepending = 0;
+				writesize = 0;
+				//printf("FOUND KEYWORD %d\n", keywordid);
+
+				if (keywordid == KEYWORD_DECODER)
+				{
+					mRules.Export(exporter, &mLabels);
+				}
+			}
+		}
+		
+		writesize+=writesizepending;
+		fwrite(templatebuf + writepos, 1, writesize, fout);
+
+		delete[] templatebuf;
+	}
+
+	if (ftpl)
+		fclose(ftpl);
+	if (fout)
+		fclose(fout);
+
+	exporter->SetFile(0);
+
+	return true;
 }
