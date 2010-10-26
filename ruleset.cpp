@@ -173,6 +173,7 @@ bool RuleSet::CheckOverlap(LabelSet* labels)
 	unsigned int j;
 	unsigned int commonmask;
 	bool result = false;
+	std::string pa, pb;
 
 
 	for(i=0; i<mRules.size(); i++)
@@ -191,13 +192,20 @@ bool RuleSet::CheckOverlap(LabelSet* labels)
 				if (!result)
 				{
 					result = true;
-					fprintf(stderr, "ERROR: Please fix the overlap of bit encodings between the following rules:\n");
+					fprintf(stderr, "ERROR: Please fix the overlap of bitstrings between the following rules:\n");
 				}
 
-				const std::string& pa = labels->Lookup(ra->Label());
-				const std::string& pb = labels->Lookup(rb->Label());
+				const std::string& la = labels->Lookup(ra->Label());
+				const std::string& lb = labels->Lookup(rb->Label());
 
-				fprintf(stderr, "ERROR: Overlap between line %d and %d (%s vs %s).\n", ra->LineNum(), rb->LineNum(), pa.c_str(), pb.c_str());
+
+				ra->BuildPatternString(&pa);
+				rb->BuildPatternString(&pb);
+				
+
+				fprintf(stderr, "ERROR: Overlap between label %s and %s:\n", la.c_str(), lb.c_str());
+				fprintf(stderr, "ERROR: %s,\n", pa.c_str());
+				fprintf(stderr, "ERROR: %s.\n", pb.c_str());
 			}
 		}
 	}
@@ -981,7 +989,17 @@ void RuleSet::ExportTables(LangExporter* exporter, LabelSet* labelset)
 	if (mRedirect)
 		return;
 
-	if (mDivType == DIV_TABLE)
+	if (mDivType == DIV_PATTERN)
+	{
+		for(i=0; i<mChildren.size(); i++)
+		{
+			RuleSet* child = mChildren[i];
+
+			if (child->mRedirect == 0 && child->mStub)
+				exporter->VisitStubPrototype(child->mNode);
+		}
+	}
+	else if (mDivType == DIV_TABLE)
 	{
 		for(i=0; i<mChildren.size(); i++)
 		{

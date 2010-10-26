@@ -1,0 +1,52 @@
+<SPEC gamma="9.1"> <!-- Gamma specifies penalty for memory usage. Low values will generate more tables. -->
+ <LANGUAGE>C</LANGUAGE>
+ <TEMPLATE>arm.c</TEMPLATE>
+ <FUNCROOT>arm_disassemble</FUNCROOT>
+ <FUNCVARSDEF>unsigned int in, arm_opcode* op</FUNCVARSDEF>
+ <FUNCVARSCALL>in, op</FUNCVARSCALL>
+ <FUNCUNDEF>arm_undefined</FUNCUNDEF>
+ <FUNCSTUB>arm_stub</FUNCSTUB>
+ <FUNCTABLE>arm_table</FUNCTABLE>
+ 
+ <MACROPATTERN name="shift">
+  <ITEM>------1-------------------------</ITEM>
+  <ITEM>------0--------------------0----</ITEM>
+  <ITEM>------0-----------------0--1----</ITEM>
+ </MACROPATTERN> 
+ 
+ <MACROPATTERN name="cond">
+  <ITEM>0000----------------------------</ITEM>
+  <ITEM>0001----------------------------</ITEM>
+  <ITEM>0010----------------------------</ITEM>
+  <ITEM>0011----------------------------</ITEM>
+  <ITEM>0100----------------------------</ITEM>
+  <ITEM>0101----------------------------</ITEM>
+  <ITEM>0110----------------------------</ITEM>
+  <ITEM>0111----------------------------</ITEM>
+  <ITEM>1000----------------------------</ITEM>
+  <ITEM>1001----------------------------</ITEM>
+  <ITEM>1010----------------------------</ITEM>
+  <ITEM>1011----------------------------</ITEM>
+  <ITEM>1100----------------------------</ITEM>
+  <ITEM>1101----------------------------</ITEM>
+  <ITEM>1110----------------------------</ITEM>
+  <!-- <ITEM>1111----------------------------</ITEM> -->
+ </MACROPATTERN> 
+ 
+ <PATTERN label="arm_dataprocess">----00-0000--------------------- | cond | shift</PATTERN> <!-- AND -->
+ <PATTERN label="arm_dataprocess">----00-0001--------------------- | cond | shift</PATTERN> <!-- EOR -->
+ <PATTERN label="arm_dataprocess">----00-0010--------------------- | cond | shift</PATTERN> <!-- SUB -->
+ <PATTERN label="arm_dataprocess">----00-0011--------------------- | cond | shift</PATTERN> <!-- RSB -->
+ <PATTERN label="arm_dataprocess">----00-0100--------------------- | cond | shift</PATTERN> <!-- ADD -->
+ <PATTERN label="arm_dataprocess">----00-0101--------------------- | cond | shift</PATTERN> <!-- ADC -->
+ <PATTERN label="arm_dataprocess">----00-0110--------------------- | cond | shift</PATTERN> <!-- SBC -->
+ <PATTERN label="arm_dataprocess">----00-0111--------------------- | cond | shift</PATTERN> <!-- RSC -->
+ <PATTERN label="arm_dataprocess">----00-10001-------------------- | cond | shift</PATTERN> <!-- TST -->
+ <PATTERN label="arm_dataprocess">----00-10011-------------------- | cond | shift</PATTERN> <!-- TEQ -->
+ <PATTERN label="arm_dataprocess">----00-10101-------------------- | cond | shift</PATTERN> <!-- CMP -->
+ <PATTERN label="arm_dataprocess">----00-10111-------------------- | cond | shift</PATTERN> <!-- CMN -->
+ <PATTERN label="arm_dataprocess">----00-1100--------------------- | cond | shift</PATTERN> <!-- ORR -->
+ <PATTERN label="arm_dataprocess">----00-1101--------------------- | cond | shift</PATTERN> <!-- MOV -->
+ <PATTERN label="arm_dataprocess">----00-1110--------------------- | cond | shift</PATTERN> <!-- BIC -->
+ <PATTERN label="arm_dataprocess">----00-1111--------------------- | cond | shift</PATTERN> <!-- MVN -->
+</SPEC>

@@ -70,7 +70,7 @@ bool SpecFile::LoadMacroPatterns(TiXmlHandle spec)
 
 		if (name == 0)
 		{
-			fprintf(stderr, "Error: No name for macropattern.\n");
+			fprintf(stderr, "ERROR: No name for macropattern.\n");
 			return false;
 		}
 		else
@@ -83,7 +83,7 @@ bool SpecFile::LoadMacroPatterns(TiXmlHandle spec)
 
 				if (bitstring == 0)
 				{
-					fprintf(stderr, "Error: No bitstring found for macropattern \"%s\"\n", name);
+					fprintf(stderr, "ERROR: No bitstring found for macropattern \"%s\"\n", name);
 					return false;
 				}
 				else
@@ -99,7 +99,7 @@ bool SpecFile::LoadMacroPatterns(TiXmlHandle spec)
 
 			if (macropattern->HasOverlap())
 			{
-				fprintf(stderr, "Error: Macropattern \"%s\" has overlapping bitstrings.\n", name);
+				fprintf(stderr, "ERROR: Macropattern \"%s\" has overlapping bitstrings.\n", name);
 				return false;
 			}
 
@@ -163,14 +163,14 @@ bool SpecFile::ExpandMacro(PatternSet* patset, const char* macro, unsigned int m
 
 	if (!set)
 	{
-		fprintf(stderr, "Error: Macropattern %s not found\n", macro);
+		fprintf(stderr, "ERROR: Macropattern %s not found\n", macro);
 
 		return false;
 	}
 
 	if (false == patset->Expand(*set))
 	{
-		fprintf(stderr, "Error: Macropattern \"%s\" expansion found bits which should be don't care.\n", macro);
+		fprintf(stderr, "ERROR: Macropattern \"%s\" expansion found bits which should be don't care.\n", macro);
 
 		return false;
 	}
@@ -239,7 +239,7 @@ bool SpecFile::LoadPattern(unsigned int label, const char* buf, unsigned int siz
 	patset.Minimize();
 	if (patset.HasOverlap())
 	{
-		fprintf(stderr, "Error: Pattern after expansion has overlap.\n");
+		fprintf(stderr, "ERROR: Pattern after expansion has overlap.\n");
 
 		return false;
 	}
@@ -272,11 +272,11 @@ bool SpecFile::LoadRules(TiXmlHandle spec)
 
 		if (labelname == 0)
 		{
-			fprintf(stderr, "Error: No label found for pattern.\n");
+			fprintf(stderr, "ERROR: No label found for pattern.\n");
 		}
 		else if (buf == 0)
 		{
-			fprintf(stderr, "Error: No text for pattern.\n");
+			fprintf(stderr, "ERROR: No text for pattern.\n");
 		}
 		else
 		{
@@ -309,12 +309,12 @@ bool SpecFile::Load(const char* filepath)
 	mMacroPatterns.Clear();
 
 	mRules.SetScratchpad(&mScratchpad);
-	mRules.SetGamma(2.0f);
+	
 	
 	
 	if (false == document.LoadFile())
 	{
-		fprintf(stderr, "Failed to load %s.\n", filepath);
+		fprintf(stderr, "ERROR: Failed to load %s.\n", filepath);
 
 		return false;
 	}
@@ -331,7 +331,15 @@ bool SpecFile::Load(const char* filepath)
 	FetchTextFromNode(spec.FirstChild("FUNCSTUB"), &mFuncStub);
 	FetchTextFromNode(spec.FirstChild("FUNCTABLE"), &mFuncTable);
 
+	TiXmlElement* specelem = spec.ToElement();
+	
+	if (!specelem || specelem->QueryFloatAttribute("gamma", &mGamma) != TIXML_SUCCESS)
+	{
+		mGamma = 2.0f;
+		fprintf(stdout, "Gamma not found, defaulting to %f.\n", mGamma);
+	}
 
+	mRules.SetGamma(mGamma);
 
 	printf("Function root: %s\n", mFuncRoot.c_str());
 	printf("Function vars def: %s\n", mFuncVarsDef.c_str());
@@ -369,7 +377,7 @@ void SpecFile::SaveDot(const char* filepath)
 	mRules.SaveDot(filepath);
 }
 
-void SpecFile::Export(const char* filepath)
+bool SpecFile::Export(const char* filepath)
 {
 	CSrcExporter csrcexporter;
 	LangExporter* exporter = 0;
@@ -381,8 +389,8 @@ void SpecFile::Export(const char* filepath)
 
 	if (exporter == 0)
 	{
-		fprintf(stderr, "Error: Unknown language \"%s\" used for exporting.\n", mLanguage.c_str());
-		return;
+		fprintf(stderr, "ERROR: Unknown language \"%s\" used for exporting.\n", mLanguage.c_str());
+		return false;
 	}
 
 	exporter->SetFuncRoot(mFuncRoot);
@@ -390,7 +398,8 @@ void SpecFile::Export(const char* filepath)
 	exporter->SetFuncVarsCall(mFuncVarsCall);
 	exporter->SetFuncStub(mFuncStub);
 	exporter->SetFuncTable(mFuncTable);
-	ExportTemplate(filepath, exporter);
+
+	return ExportTemplate(filepath, exporter);
 }
 
 bool SpecFile::ExportTemplate(const char* filepath, LangExporter* exporter)
@@ -415,12 +424,12 @@ bool SpecFile::ExportTemplate(const char* filepath, LangExporter* exporter)
 	fout = fopen(filepath, "w");
 	if (ftpl == 0)
 	{
-		fprintf(stderr, "Error: Unable to open template file \"%s\".\n", mTemplate.c_str());
+		fprintf(stderr, "ERROR: Unable to open template file \"%s\".\n", mTemplate.c_str());
 		return false;
 	}
 	else if (fout == 0)
 	{
-		fprintf(stderr, "Error: Unable to open output file \"%s\".\n", filepath);
+		fprintf(stderr, "ERROR: Unable to open output file \"%s\".\n", filepath);
 		return false;
 	}
 	else

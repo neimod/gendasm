@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
 	//CSrcExporter csrcexporter;
 
 	//specfile.Load("armv4.def");
-	if (false == specfile.Load("armv4.xml"))
+	if (false == specfile.Load("arm.xml"))
 	{
 		return -1;
 	}

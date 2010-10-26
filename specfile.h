@@ -26,11 +26,8 @@ public:
 	void Clear();
 	bool Load(const char* filepath);
 	void SaveDot(const char* filepath);
-	void Export(const char* filepath);
-	
+	bool Export(const char* filepath);
 
-	const std::string& RootFunctionName() const { return mFuncRoot; }
-	
 private:
 	bool LoadMacroPatterns(TiXmlHandle spec);
 	bool LoadRules(TiXmlHandle spec);
@@ -49,6 +46,7 @@ private:
 	std::string mFuncStub;
 	std::string mFuncTable;
 	std::string mTemplate;
+	float mGamma;
 
 	MacroPatternSet mMacroPatterns;
 	LabelSet mLabels;
