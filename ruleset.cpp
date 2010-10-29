@@ -305,6 +305,7 @@ void RuleSet::ReduceSimilarSubtrees()
 				// Node b will be redirected to node a.
 				b->mRedirect = a;
 				a->mStub = true;
+				//printf("Redirect %d to %d\n", b->mNode, a->mNode);
 			}
 		}
 	}
@@ -972,7 +973,7 @@ void RuleSet::Export(LangExporter* exporter, LabelSet* labelset)
 		RuleSet* set = queue[i];
 
 		exporter->BeginStub(set->mNode);
-		set->ExportNode(exporter, labelset);
+		set->ExportNode(exporter, labelset, true);
 		exporter->EndStub();
 	}
 
@@ -1038,7 +1039,7 @@ void RuleSet::ExportTables(LangExporter* exporter, LabelSet* labelset)
 
 
 
-void RuleSet::ExportNode(LangExporter* exporter, LabelSet* labelset)
+void RuleSet::ExportNode(LangExporter* exporter, LabelSet* labelset, bool root)
 {
 	if (mChildren.size() == 0)
 	{
@@ -1052,27 +1053,35 @@ void RuleSet::ExportNode(LangExporter* exporter, LabelSet* labelset)
 			RuleSet* right = mChildren[1];
 
 
+			if (root == false)
+			{
+				if (mStub)
+				{
+					exporter->VisitStub(mNode);
+					return;
+				}
+				else if (mRedirect)
+				{
+					exporter->VisitStub(mRedirect->mNode);
+					return;
+				}
+			}
+
+
 			exporter->VisitPattern(mDivPattern.Mask(), mDivPattern.Signature());
 			exporter->BeginTrueBranch();
-			if (left->mStub)
-				exporter->VisitStub(left->mNode);
-			else if (left->mRedirect)
-				exporter->VisitStub(left->mRedirect->mNode);
-			else
-				left->ExportNode(exporter, labelset);
+			left->ExportNode(exporter, labelset, false);
 			exporter->EndTrueBranch();
 			exporter->BeginFalseBranch();
-			if (right->mStub)
-				exporter->VisitStub(right->mNode);
-			else if (right->mRedirect)
-				exporter->VisitStub(right->mRedirect->mNode);
-			else
-				right->ExportNode(exporter, labelset);
+			right->ExportNode(exporter, labelset, false);
 			exporter->EndFalseBranch();
 		}
 		else if (mDivType == DIV_TABLE)
 		{
-			exporter->VisitTable(mDivTableStart, (1<<mDivTableLength)-1, mNode);
+			if (mRedirect)
+				exporter->VisitTable(mDivTableStart, (1<<mDivTableLength)-1, mRedirect->mNode);
+			else
+				exporter->VisitTable(mDivTableStart, (1<<mDivTableLength)-1, mNode);
 		}
 	}
 }

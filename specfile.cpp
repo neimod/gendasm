@@ -329,6 +329,7 @@ bool SpecFile::Load(const char* filepath)
 	FetchTextFromNode(spec.FirstChild("FUNCVARSCALL"), &mFuncVarsCall);
 	FetchTextFromNode(spec.FirstChild("FUNCUNDEF"), &mFuncUndef);
 	FetchTextFromNode(spec.FirstChild("FUNCSTUB"), &mFuncStub);
+	FetchTextFromNode(spec.FirstChild("FUNCNULLSTUB"), &mFuncNullstub);
 	FetchTextFromNode(spec.FirstChild("FUNCTABLE"), &mFuncTable);
 
 	TiXmlElement* specelem = spec.ToElement();
@@ -356,6 +357,8 @@ bool SpecFile::Load(const char* filepath)
 
 	if (mRules.CheckOverlap(&mLabels))
 		return false;
+
+	mLabels.SetNullstub(mFuncNullstub);
 
 	undefinedlabel = mLabels.Add(mFuncUndef.c_str());
 	mRules.CalculateUndefined(undefinedlabel);

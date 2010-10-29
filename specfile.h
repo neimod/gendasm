@@ -46,6 +46,7 @@ private:
 	std::string mFuncUndef;
 	std::string mFuncStub;
 	std::string mFuncTable;
+	std::string mFuncNullstub;
 	std::string mTemplate;
 	float mGamma;
 

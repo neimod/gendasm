@@ -57,7 +57,7 @@ private:
 	bool DivideByPattern(unsigned int* idgen, const Pattern& f);
 	bool DivideByTable(unsigned int* idgen, unsigned int bitstart, unsigned int bitlength);
 	void BuildExportQueue(std::vector<RuleSet*>* queue);
-	void ExportNode(LangExporter* exporter, LabelSet* labelset);
+	void ExportNode(LangExporter* exporter, LabelSet* labelset, bool root);
 	void ExportTables(LangExporter* exporter, LabelSet* labelset);
 	void BuildNodeTable(std::vector<RuleSet*>* table);
 

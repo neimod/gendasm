@@ -15,7 +15,7 @@ public:
 	void Clear();
 	unsigned int Size() const { return mNodes.size(); }
 
-	void SetNullsub(const std::string& nullsub) { mNullsub = nullsub; }
+	void SetNullstub(const std::string& nullstub) { mNullstub = nullstub; }
 
 private:
 	typedef struct
@@ -25,7 +25,7 @@ private:
 	} Node;
 
 	std::vector<Node*> mNodes;
-	std::string mNullsub;
+	std::string mNullstub;
 };
 
 #endif // _LABELSET_H_
