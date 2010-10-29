@@ -9,12 +9,14 @@
  <FUNCTABLE>arm_table</FUNCTABLE>
  
  <MACROPATTERN name="shift">
+  <!--  10987654321098765432109876543210    -->
   <ITEM>------1-------------------------</ITEM>
   <ITEM>------0--------------------0----</ITEM>
   <ITEM>------0-----------------0--1----</ITEM>
  </MACROPATTERN> 
  
  <MACROPATTERN name="cond">
+  <!--  10987654321098765432109876543210    -->
   <ITEM>0000----------------------------</ITEM>
   <ITEM>0001----------------------------</ITEM>
   <ITEM>0010----------------------------</ITEM>
@@ -30,9 +32,10 @@
   <ITEM>1100----------------------------</ITEM>
   <ITEM>1101----------------------------</ITEM>
   <ITEM>1110----------------------------</ITEM>
-  <!-- <ITEM>1111----------------------------</ITEM> -->
  </MACROPATTERN> 
  
+ 
+ <!--                             10987654321098765432109876543210                      -->
  <PATTERN label="arm_dataprocess">----00-0000--------------------- | cond | shift</PATTERN> <!-- AND -->
  <PATTERN label="arm_dataprocess">----00-0001--------------------- | cond | shift</PATTERN> <!-- EOR -->
  <PATTERN label="arm_dataprocess">----00-0010--------------------- | cond | shift</PATTERN> <!-- SUB -->
@@ -49,4 +52,11 @@
  <PATTERN label="arm_dataprocess">----00-1101--------------------- | cond | shift</PATTERN> <!-- MOV -->
  <PATTERN label="arm_dataprocess">----00-1110--------------------- | cond | shift</PATTERN> <!-- BIC -->
  <PATTERN label="arm_dataprocess">----00-1111--------------------- | cond | shift</PATTERN> <!-- MVN -->
+ <PATTERN label="arm_branch"     >----101------------------------- | cond        </PATTERN> <!-- B/BL -->
+ <PATTERN label="arm_bkpt"       >111000010010------------0111----               </PATTERN> <!-- BKPT -->
+ <PATTERN label="arm_blx_imm"    >1111101-------------------------               </PATTERN> <!-- BLX (imm) -->
+ <PATTERN label="arm_blx_reg"    >----00010010------------0011---- | cond        </PATTERN> <!-- BLX (reg) -->
+ <PATTERN label="arm_bx"         >----00010010------------0001---- | cond        </PATTERN> <!-- BX -->
+ <PATTERN label="arm_bxj"        >----00010010------------0010---- | cond        </PATTERN> <!-- BXJ -->
+ <PATTERN label="arm_ldrstr"     >----01---0---------------------- | cond        </PATTERN> <!-- LDR/STR -->
 </SPEC>

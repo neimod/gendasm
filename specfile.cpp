@@ -372,9 +372,9 @@ bool SpecFile::Load(const char* filepath)
 	return true;
 }
  
-void SpecFile::SaveDot(const char* filepath)
+void SpecFile::SaveDot(const char* filepath, bool reduced)
 {
-	mRules.SaveDot(filepath);
+	mRules.SaveDot(filepath, reduced);
 }
 
 bool SpecFile::Export(const char* filepath)

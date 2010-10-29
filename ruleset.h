@@ -37,20 +37,21 @@ public:
 
 	bool CheckOverlap(LabelSet* labels);
 
-	void SaveDot(const char* filepath);
+	void SaveDot(const char* filepath, bool reduced);
 
 	void SetScratchpad(Scratchpad* scratchpad) { mScratchpad = scratchpad; }
 	void SetGamma(float gamma) { mGamma = gamma; }	
 
 	bool IsSimilar(RuleSet* set);
 	void ReduceSimilarSubtrees();
+	
 
 private:
 	bool Divide(unsigned int* idgen);
 	unsigned int CalculateGlobalMask() const;
 	unsigned int CalculateLabel() const;
 	
-	void SaveDot(FILE* f);
+	void SaveDot(FILE* f, bool reduced);
 	float TestDivideByPattern(const Pattern& f);
 	float TestDivideByTable(unsigned int bitstart, unsigned int bitlength);
 	bool DivideByPattern(unsigned int* idgen, const Pattern& f);
@@ -73,6 +74,7 @@ private:
 	unsigned int mNode;
 	RuleSet* mRedirect;
 	bool mStub;
+	bool mReducedDotOutput;
 };
 
 #endif // _RULESET_H_

@@ -25,8 +25,9 @@ public:
 
 	void Clear();
 	bool Load(const char* filepath);
-	void SaveDot(const char* filepath);
+	void SaveDot(const char* filepath, bool reduced);
 	bool Export(const char* filepath);
+
 
 private:
 	bool LoadMacroPatterns(TiXmlHandle spec);

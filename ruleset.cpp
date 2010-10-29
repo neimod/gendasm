@@ -818,17 +818,17 @@ void RuleSet::Print()
 	}
 }
 
-void RuleSet::SaveDot(const char* filepath)
+void RuleSet::SaveDot(const char* filepath, bool reduced)
 {
 	FILE* f = fopen(filepath, "wb");
 
 	fprintf(f, "digraph g {\n");
-	SaveDot(f);
+	SaveDot(f, reduced);
 	fprintf(f, "}\n");
 	fclose(f);
 }
 
-void RuleSet::SaveDot(FILE* f)
+void RuleSet::SaveDot(FILE* f, bool reduced)
 {
 	unsigned int i;
 
@@ -872,7 +872,7 @@ void RuleSet::SaveDot(FILE* f)
 		{
 			RuleSet* child = mChildren[i];
 
-			if (child->mRedirect)
+			if (reduced && child->mRedirect)
 				child = child->mRedirect;
 
 			if (i == 0)
@@ -887,7 +887,7 @@ void RuleSet::SaveDot(FILE* f)
 		{
 			RuleSet* child = mChildren[i];
 
-			if (child->mRedirect)
+			if (reduced && child->mRedirect)
 				child = child->mRedirect;
 
 			fprintf(f, "n%d -> n%d [label=\"%d\"];\n", mNode, child->mNode, i);
@@ -898,8 +898,10 @@ void RuleSet::SaveDot(FILE* f)
 	{
 		RuleSet* child = mChildren[i];
 
-		if (child->mRedirect == 0)
-			child->SaveDot(f);
+		if (!reduced || child->mRedirect == 0)
+		{
+			child->SaveDot(f, reduced);
+		}
 	}
 }
 
@@ -1085,15 +1087,16 @@ void RuleSet::BuildExportQueue(std::vector<RuleSet*>* queue)
 	if (mChildren.size() == 0)
 		return;
 
-	if (mStub)
-	{
-		queue->push_back(this);
-	}
 
 	if (mRedirect)
 		return;
 
-	if (mDivType == DIV_TABLE)
+	if (mDivType == DIV_PATTERN)
+	{
+		if (mStub)
+			queue->push_back(this);
+	}
+	else if (mDivType == DIV_TABLE)
 	{
 		for(i=0; i<mChildren.size(); i++)
 		{
@@ -1103,7 +1106,10 @@ void RuleSet::BuildExportQueue(std::vector<RuleSet*>* queue)
 				continue;
 
 			if (child->mChildren.size() != 0)
-				queue->push_back(child);
+			{
+				if (!child->mStub) // don't add children which are stubs -- they will add themselves later.
+					queue->push_back(child);
+			}
 		}
 	}
 
