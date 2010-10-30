@@ -304,7 +304,9 @@ void RuleSet::ReduceSimilarSubtrees()
 
 				// Node b will be redirected to node a.
 				b->mRedirect = a;
-				a->mStub = true;
+
+				if (a->mDivType == DIV_PATTERN)
+					a->mStub = true;
 				//printf("Redirect %d to %d\n", b->mNode, a->mNode);
 			}
 		}
@@ -571,6 +573,7 @@ bool RuleSet::DivideByTable(unsigned int* idgen, unsigned int bitstart, unsigned
 
 		set->SetScratchpad(mScratchpad);
 		set->SetGamma(mGamma);
+		set->mStub = true;
 	}
 
 
@@ -965,6 +968,7 @@ void RuleSet::Export(LangExporter* exporter, LabelSet* labelset)
 		exporter->VisitLabelPrototype(labelset->Lookup(i));
 	}
 
+	ExportStubPrototypes(exporter);
 	ExportTables(exporter, labelset);
 
 
@@ -980,6 +984,28 @@ void RuleSet::Export(LangExporter* exporter, LabelSet* labelset)
 	exporter->End();
 }
 
+void RuleSet::ExportStubPrototypes(LangExporter* exporter)
+{
+	unsigned int i;
+
+
+	if (mChildren.size() == 0)
+		return;
+
+	if (mRedirect)
+		return;
+
+
+	if (mStub)
+		exporter->VisitStubPrototype(mNode);
+
+	for(i=0; i<mChildren.size(); i++)
+	{
+		RuleSet* child = mChildren[i];
+
+		child->ExportStubPrototypes(exporter);
+	}
+}
 
 void RuleSet::ExportTables(LangExporter* exporter, LabelSet* labelset)
 {
@@ -992,28 +1018,8 @@ void RuleSet::ExportTables(LangExporter* exporter, LabelSet* labelset)
 	if (mRedirect)
 		return;
 
-	if (mDivType == DIV_PATTERN)
+	if (mDivType == DIV_TABLE)
 	{
-		for(i=0; i<mChildren.size(); i++)
-		{
-			RuleSet* child = mChildren[i];
-
-			if (child->mRedirect == 0 && child->mStub)
-				exporter->VisitStubPrototype(child->mNode);
-		}
-	}
-	else if (mDivType == DIV_TABLE)
-	{
-		for(i=0; i<mChildren.size(); i++)
-		{
-			RuleSet* child = mChildren[i];
-
-			if (child->mChildren.size() != 0 && child->mRedirect == 0)
-			{
-				exporter->VisitStubPrototype(child->mNode);
-			}
-		}
-
 		exporter->BeginTable(mNode, mChildren.size());
 		for(i=0; i<mChildren.size(); i++)
 		{
@@ -1100,27 +1106,8 @@ void RuleSet::BuildExportQueue(std::vector<RuleSet*>* queue)
 	if (mRedirect)
 		return;
 
-	if (mDivType == DIV_PATTERN)
-	{
-		if (mStub)
-			queue->push_back(this);
-	}
-	else if (mDivType == DIV_TABLE)
-	{
-		for(i=0; i<mChildren.size(); i++)
-		{
-			RuleSet* child = mChildren[i];
-
-			if (child->mRedirect)
-				continue;
-
-			if (child->mChildren.size() != 0)
-			{
-				if (!child->mStub) // don't add children which are stubs -- they will add themselves later.
-					queue->push_back(child);
-			}
-		}
-	}
+	if (mStub)
+		queue->push_back(this);
 
 	for(i=0; i<mChildren.size(); i++)
 	{

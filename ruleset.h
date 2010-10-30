@@ -59,6 +59,7 @@ private:
 	void BuildExportQueue(std::vector<RuleSet*>* queue);
 	void ExportNode(LangExporter* exporter, LabelSet* labelset, bool root);
 	void ExportTables(LangExporter* exporter, LabelSet* labelset);
+	void ExportStubPrototypes(LangExporter* exporter);
 	void BuildNodeTable(std::vector<RuleSet*>* table);
 
 private:

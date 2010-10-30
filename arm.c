@@ -47,9 +47,19 @@ typedef enum
 	BX = 20,
 	BXJ = 21,
 	LDR = 22,
-	LDRT = 23,
-	STR = 24,
-	STRT = 25,
+	LDRB = 23,
+	LDRT = 24,
+	LDRBT = 25,
+	STR = 26,
+	STRB = 27,
+	STRT = 28,
+	STRBT = 29,
+	LDRH = 30,
+	LDRSH = 31,
+	LDRSB = 32,
+	STRH = 33,
+	LDRD = 34,
+	STRD = 35,
 } arm_opcodetype;
 
 typedef enum
@@ -174,9 +184,19 @@ const char* mnemonics[]=
 	"BX",
 	"BXJ",
 	"LDR",
+	"LDRB",
 	"LDRT",
+	"LDRBT",
 	"STR",
+	"STRB",
 	"STRT",
+	"STRBT",
+	"LDRH",
+	"LDRSH",
+	"LDRSB",
+	"STRH",
+	"LDRD",
+	"STRD",
 };
 
 
@@ -221,12 +241,63 @@ static void arm_dataprocess_reg_shift(unsigned int in, arm_opcode* op);
 static void arm_dataprocess_imm(unsigned int in, arm_opcode* op);
 static void arm_dataprocess_imm_shift(unsigned int in, arm_opcode* op);
 static void arm_shift(unsigned int in, arm_opcode* op);
+static void arm_nullstub(unsigned int in, arm_opcode* op);
 
 static void arm_clearop(arm_opcode* op);
 void arm_format(arm_context* ctx, char* buf, arm_opcode* op);
 
-%GENDASM.DECODER%
 
+// --- BEGIN GENERATED DECODER ---
+%GENDASM.DECODER%
+// --- END GENERATED DECODER ---
+
+void arm_ldrstrmisc(unsigned int in, arm_opcode* op)
+{
+	unsigned int type = ((in>>5) & 3) | ((in>>18)&4);
+
+
+	arm_clearop(op);
+		
+	switch(type)
+	{
+		case 1: op->opcode = STRH; break;
+		case 2: op->opcode = LDRD; break;
+		case 3: op->opcode = STRD; break;
+		case 5: op->opcode = LDRH; break;
+		case 6: op->opcode = LDRSB; break;
+		case 7: op->opcode = LDRSH; break;
+		default: arm_undefined(in, op); return;
+	}
+	
+	op->cond = (in >> 28) & 15;
+	op->rn = (in>>16) & 15;
+	op->rd = (in>>12) & 15;
+	
+	if (in & (1<<22))
+	{
+		op->imm = ((in & 0xF00)>>4) | (in & 15);
+		
+		if (in & (1<<24))
+			op->fmt = FMT_RD_ADDR_RN_IMM;
+		else
+			op->fmt = FMT_RD_ADDR_RN_POST_IMM;
+	}
+	else
+	{
+		op->rm = in & 15;
+		
+		if (in & (1<<24))
+			op->fmt = FMT_RD_ADDR_RN_RM;
+		else
+			op->fmt = FMT_RD_ADDR_RN_POST_RM;
+	}
+
+	if ((in & (1<<23)) == 0)
+		op->flags |= FLAG_NEGATIVE;
+		
+	if (in & (1<<21))
+		op->flags |= FLAG_WRITEBACK;
+}
 
 void arm_ldrstr(unsigned int in, arm_opcode* op)
 {
@@ -241,16 +312,36 @@ void arm_ldrstr(unsigned int in, arm_opcode* op)
 	if (in & (1<<20))
 	{
 		if ((in & (1<<24)) == 0 && (in & (1<<21)))
-			op->opcode = LDRT;
+		{
+			if (in & (1<<22))
+				op->opcode = LDRBT;
+			else
+				op->opcode = LDRT;
+		}
 		else
-			op->opcode = LDR;		
+		{
+			if (in & (1<<22))
+				op->opcode = LDRB;
+			else
+				op->opcode = LDR;
+		}
 	}
 	else
 	{
 		if ((in & (1<<24)) == 0 && (in & (1<<21)))
-			op->opcode = STRT;
+		{
+			if (in & (1<<22))
+				op->opcode = STRBT;
+			else
+				op->opcode = STRT;
+		}
 		else
-			op->opcode = STR;
+		{
+			if (in & (1<<22))
+				op->opcode = STRB;
+			else
+				op->opcode = STR;
+		}
 	}
 
 	op->cond = (in >> 28) & 15;
@@ -615,4 +706,9 @@ void arm_clearop(arm_opcode* op)
 	op->rs = 0;
 	op->flags = 0;
 	op->fmt = ~0;
+}
+
+void arm_nullstub(unsigned int in, arm_opcode* op)
+{
+	arm_clearop(op);
 }
